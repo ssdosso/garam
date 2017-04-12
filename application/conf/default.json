@@ -1,0 +1,72 @@
+{
+
+  "serverType":"game",
+  "testMode":true,
+  "ssl" :false,
+  "clusterMode" : true,
+
+  "logger_s3": false,
+  "workerConnectionDC":false,
+  "localServerIP" :"game",
+
+  "portInfo":{
+    "mode" :"cpu",
+    "maxCount":1,
+    "portType" : 0,
+    "defaultPort" : 8080
+  },
+  "userPacketDebug":false,
+  "service" :  {
+    "transport" : true,
+    "type":"http",
+    "transportOptions": {},
+    "redis":{"host":"127.0.0.1","port":6379},
+
+    "debug" :false,
+    "origin":[]
+  },
+
+  "logDir" :"./logs",
+  "useDB" : true,
+  "db" : [
+    {
+      "namespace":"account",
+      "driver":"Mssql",
+      "hostname":"xxx.xxx.xxx.xxx",
+      "username" :"fansGame",
+      "database" :"AccountDB",
+      "password":"ehsqxxxxjfwk1@#",
+      "port":"13333",
+      "procedure" :true,
+      "connLimit" :1,
+      "pool": {
+        "max":20,
+        "min":0,
+        "idleTimeoutMillis": 30000
+      }
+    },
+
+
+    {
+      "namespace":"mysqltest",
+      "driver":"Mysql",
+      "hostname":"localhost",
+      "username" :"root",
+      "database" :"testdb",
+      "password":"choil123",
+      "port":"3306",
+      "procedure" :true,
+      "connLimit" :1
+    }
+
+  ],
+  "net": {
+    "remote": [{
+      "hostname":"dc",
+      "ip" :"172.19.5.11",
+      "port":4000
+    }]
+  }
+
+
+}

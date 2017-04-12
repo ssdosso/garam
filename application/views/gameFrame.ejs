@@ -1,0 +1,48 @@
+<html>
+<head>
+
+    <title>판타지 스타디움</title>
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge,chrome=1" />
+    <script src="./base.js"></script>
+    <script>
+
+        document.domain = "naver.com";
+
+        (function(document, window, domIsReady, undefined) {
+            domIsReady(function() {
+
+
+//                window.frames[1].onload = function() {
+//
+//                    console.log(121212)
+//                }
+
+
+                window.onunload = function(e) {
+
+//                    var xhr = new XMLHttpRequest();
+//                    xhr.open('GET', '/start/unload', true);
+//                    xhr.send();
+                  //  window.opener.location.reload();
+
+
+
+                }
+                function closeIt() {
+                    window.opener.location.reload();
+                }
+
+
+            });
+        })(document, window, domIsReady);
+
+    </script>
+</head>
+
+<frameset rows="*%, 100%" border="0" >
+    <frame noresize scrolling="no" marginwidth="0" marginheight="0">
+    <frame src="http://fs.sports.naver.com:<%= clientPort %>/game/<%= version %>/index.html" name="main" marginwidth="0" marginheight="0" scrolling="no">
+
+</frameset>
+
+</html>
