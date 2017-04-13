@@ -77,7 +77,7 @@ node index.js -l true //packet debug
  
  
  
- # remote 
+ # remote  (Role to client server)
  
    "net": {
      "remote": [{
@@ -88,7 +88,7 @@ node index.js -l true //packet debug
    }
    
    
- # host server
+ # host server ( Role to host server )
    
    
      "net": {
