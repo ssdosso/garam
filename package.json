@@ -3,7 +3,7 @@
     "name": "Cho,Il-Hyun",
     "email": "ssdosso@naver.com"
   },
-  "name": "Garam",
+  "name": "garam",
   "version": "1.0.0",
   "repository": {
     "type": "git",
@@ -35,7 +35,7 @@
     "express-useragent": "^1.0.4",
     "int64-buffer": "^0.1.6",
     "jade": "^1.11.0",
-    "java": "^0.7.2",
+
     "json2csv": "^3.0.2",
     "jsonwebtoken": "^7.1.9",
     "method-override": "^2.3.5",
