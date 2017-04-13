@@ -36,7 +36,7 @@
     "int64-buffer": "^0.1.6",
     "jade": "^1.11.0",
 
-    "json2csv": "^3.0.2",
+
     "jsonwebtoken": "^7.1.9",
     "method-override": "^2.3.5",
     "moment": "^2.10.6",
