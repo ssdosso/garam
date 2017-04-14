@@ -1,5 +1,8 @@
 # Garam Framework Prototype
 
+# install
+ npm install garam
+
 # server Start
 node index.js
 # dev options
