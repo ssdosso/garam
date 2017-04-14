@@ -1,0 +1,49 @@
+{
+
+  "serverType":"game",
+  "testMode":true,
+  "ssl" :false,
+  "clusterMode" : true,
+
+  "logger_s3": false,
+  "workerConnectionDC":false,
+  "localServerIP" :"game",
+
+  "portInfo":{
+    "mode" :"cpu",
+    "maxCount":1,
+    "portType" : 0,
+    "defaultPort" : 8888
+  },
+  "userPacketDebug":false,
+  "service" :  {
+    "transport" : false,
+    "type":"http",
+    "transportOptions": {},
+    "redis":false,
+
+    "debug" :false,
+    "origin":[]
+  },
+
+  "logDir" :"./logs",
+  "useDB" : true,
+  "db" : [
+
+
+    {
+      "namespace":"mysqltest",
+      "driver":"Mysql",
+      "hostname":"localhost",
+      "username" :"root",
+      "database" :"testdb",
+      "password":"choil123",
+      "port":"3306",
+      "procedure" :true,
+      "connLimit" :1
+    }
+
+  ]
+
+
+}
