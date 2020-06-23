@@ -11,11 +11,15 @@
   },
   "homepage": "",
   "main": "./index.js",
-  "engines": { "node": ">= 0.5.0" },
-  "licenses": [ {
-    "type": "Apache-2.0"
-  , "url": "https://opensource.org/licenses/apache2.0.php"
-  } ],
+  "engines": {
+    "node": ">= 0.5.0"
+  },
+  "licenses": [
+    {
+      "type": "Apache-2.0",
+      "url": "https://opensource.org/licenses/apache2.0.php"
+    }
+  ],
   "dependencies": {
     "async": "^1.5.0",
     "async-json": "0.0.2",
@@ -35,14 +39,13 @@
     "express-useragent": "^1.0.4",
     "int64-buffer": "^0.1.6",
     "jade": "^1.11.0",
-
-
     "jsonwebtoken": "^7.1.9",
     "method-override": "^2.3.5",
     "moment": "^2.10.6",
     "mssql": "^3.0.0",
     "mysql": "^2.13.0",
     "nohm": "^0.9.7",
+    "raw-body-parser": "0.0.2",
     "redis": "^2.4.2",
     "request": "^2.65.0",
     "sanitizer": "^0.1.2",

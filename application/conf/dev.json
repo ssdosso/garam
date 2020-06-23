@@ -34,9 +34,9 @@
     {
       "namespace":"mysqltest",
       "driver":"Mysql",
-      "hostname":"localhost",
+      "hostname":"127.0.0.1",
       "username" :"root",
-      "database" :"testdb",
+      "database" :"game",
       "password":"choil123",
       "port":"3306",
       "procedure" :true,
