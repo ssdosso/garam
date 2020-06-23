@@ -17,7 +17,7 @@ node index.js -t dev
 
 
 
-# db support MYSQL, MSSQL, REDIS, momory [다중 DB 지원]
+# db support MYSQL, MSSQL, REDIS, memory [다중 DB 지원]
 
 //conf/default.json
 
