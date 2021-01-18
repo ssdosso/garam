@@ -16,7 +16,7 @@ var App = Application.extend({
         var self = this;
 
         this.secret ="eyc#ypt%onFe75dy";
-        this.iv  = new Buffer('gJFRCVd0hzRCXcn5CEBSfQ==', 'base64');
+        this.iv  = Buffer.from('gJFRCVd0hzRCXcn5CEBSfQ==', 'base64');
 
         var servercode = this.encrypt('wlxmflrtm!@' );
 

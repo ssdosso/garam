@@ -97,7 +97,7 @@ _.extend(buffer.prototype, Base.prototype, {
             order = this.length;
         }
         this.fields[name]  = {
-            buffer :new Buffer(FieldType[type]),
+            buffer :Buffer.alloc(FieldType[type]),
             type :type,
             order : order,
             name : name

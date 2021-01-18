@@ -14,7 +14,7 @@ var App = Application.extend({
         var self = this;
 
         this.secret ="eyc#ypt%onFe75dy";
-        this.iv  = new Buffer('gJFRCVd0hzRCXcn5CEBSfQ==', 'base64');
+        this.iv  = Buffer.from('gJFRCVd0hzRCXcn5CEBSfQ==', 'base64');
 
         var servercode = this.encrypt('wlxmflrtm!@' );
 
@@ -76,6 +76,11 @@ var App = Application.extend({
         return this._dcServer.serverName;
     },
     getServerName : function () {
+        if ( this._dcServer == null) {
+                return 'slot:8888';
+
+        }
+
         return this._dcServer.serverName +':'+this.getClientPort();
     },
     getClientPort : function () {

@@ -29,7 +29,7 @@ if (Cluster.isMaster) {
             this.addCommand('sampleCmd',function(){
                 console.log('test');
             });
-            this._iproc = readline.createInterface(process.stdin, process.stdout, null);
+            this._iproc = readline.createInterface({input:process.stdin, output:process.stdout});
             this._iproc.on('line', function(line) {
 
                 var ix = line.lastIndexOf('\n');

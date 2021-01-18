@@ -293,7 +293,7 @@ _.extend(JsonParse.prototype, Base.prototype, {
             this._overflow = data;
         } else {
             var prevOverflow = this._overflow;
-            this._overflow = new Buffer(this._overflow.length + data.length);
+            this._overflow = Buffer.alloc(this._overflow.length + data.length);
             prevOverflow.copy(this._overflow, 0);
             data.copy(this._overflow, prevOverflow.length);
             return this._overflow;
@@ -301,7 +301,7 @@ _.extend(JsonParse.prototype, Base.prototype, {
         // var buffer = new Buffer(data.length - self._toRead );
     },
     createHeartBeatBuffer : function (callback) {
-        var buf =  new Buffer(2);
+        var buf =  Buffer.alloc(2);
 
         buf[0] = 0x81;
 
@@ -313,7 +313,7 @@ _.extend(JsonParse.prototype, Base.prototype, {
 
         var bodyBuffer;
 
-        var jsonData = new Buffer(data);
+        var jsonData = Buffer.from(data);
 
 
         //buffers 가 125 바이트 이내 일경우의 처리
@@ -322,10 +322,10 @@ _.extend(JsonParse.prototype, Base.prototype, {
         //세번째 비트 부터는 옵션 값이다.
         if (jsonData.length <= 125 ) {
 
-            var headerBuf =  new Buffer(2);
+            var headerBuf =  Buffer.alloc(2);
             headerBuf[0] = 0x84;
             headerBuf[1] = data.length;
-            bodyBuffer = new Buffer(data.length + headerBuf.length);
+            bodyBuffer = Buffer.alloc(data.length + headerBuf.length);
             headerBuf.copy(bodyBuffer,0,0,headerBuf.length);
             jsonData.copy(bodyBuffer,headerBuf.length,0,jsonData.length);
             callback(bodyBuffer)
@@ -335,11 +335,11 @@ _.extend(JsonParse.prototype, Base.prototype, {
             //UINT16 Size
 
 
-            var headerBuf =  new Buffer(4);
+            var headerBuf =  Buffer.alloc(4);
             headerBuf[0] = 0x85;
             headerBuf[1] = 0x7E;
             headerBuf.writeUInt16LE(jsonData.length,2);
-            bodyBuffer = new Buffer(jsonData.length + headerBuf.length);
+            bodyBuffer = Buffer.alloc(jsonData.length + headerBuf.length);
 
             headerBuf.copy(bodyBuffer,0,0,headerBuf.length);
             jsonData.copy(bodyBuffer,headerBuf.length,0,jsonData.length);
@@ -349,14 +349,14 @@ _.extend(JsonParse.prototype, Base.prototype, {
         } else {
             //UInt32
 
-            var headerBuf =  new Buffer(6);
+            var headerBuf =  Buffer.alloc(6);
 
             headerBuf[0] = 0x86;
             headerBuf[1] = 0x7F; //126
             headerBuf.writeUInt32LE(jsonData.length,2); //전체길이
 
 
-            bodyBuffer = new Buffer(jsonData.length + headerBuf.length);
+            bodyBuffer = Buffer.alloc(jsonData.length + headerBuf.length);
             headerBuf.copy(bodyBuffer,0,0,headerBuf.length);
             jsonData.copy(bodyBuffer,headerBuf.length,0,jsonData.length);
             callback(bodyBuffer);
@@ -463,7 +463,7 @@ _.extend(JsonParse.prototype, Base.prototype, {
                 var extendedPayloadLen = buffer.readUInt32LE(2); //총길이
 
 
-                var targetBuffer = new Buffer(extendedPayloadLen);
+                var targetBuffer = Buffer.alloc(extendedPayloadLen);
                 var targetStart = 0;
                 var sourceStart = 6;
                 var sourceEnd = extendedPayloadLen + sourceStart;
@@ -479,7 +479,7 @@ _.extend(JsonParse.prototype, Base.prototype, {
 
                 if (buffer.length  > sourceEnd) {
                     var overLen =sourceEnd;
-                    var nextBuffer = new Buffer(buffer.length-overLen);
+                    var nextBuffer = Buffer.alloc(buffer.length-overLen);
                     buffer.copy(nextBuffer,0,overLen,buffer.length);
                     //_expect : function(data,opcode)
                     this._expect(nextBuffer);
@@ -505,7 +505,7 @@ _.extend(JsonParse.prototype, Base.prototype, {
                 var extendedPayloadLen = buffer.readUInt16LE(2); //총길이
 
 
-                var targetBuffer = new Buffer(extendedPayloadLen);
+                var targetBuffer = Buffer.alloc(extendedPayloadLen);
                 var targetStart = 0;
                 var sourceStart = 4;
                 var sourceEnd = extendedPayloadLen + sourceStart;
@@ -521,7 +521,7 @@ _.extend(JsonParse.prototype, Base.prototype, {
 
                 if (buffer.length  > sourceEnd) {
                     var overLen =sourceEnd;
-                    var nextBuffer = new Buffer(buffer.length-overLen);
+                    var nextBuffer = Buffer.alloc(buffer.length-overLen);
                     buffer.copy(nextBuffer,0,overLen,buffer.length);
                     //_expect : function(data,opcode)
                     this._expect(nextBuffer);
@@ -535,7 +535,7 @@ _.extend(JsonParse.prototype, Base.prototype, {
 
                     this._onHeartbeatClear();
                 } else {
-                    var nextBuffer = new Buffer(buffer.length-2);
+                    var nextBuffer = Buffer.alloc(buffer.length-2);
                     buffer.copy(nextBuffer,0,2,buffer.length);
                     this._sendMessage({type:'heartbeat'});
                     this._expect(nextBuffer);
@@ -556,7 +556,7 @@ _.extend(JsonParse.prototype, Base.prototype, {
                 }
 
                 function expectLowData(buffer,length) {
-                    var targetBuffer = new Buffer(length);
+                    var targetBuffer = Buffer.alloc(length);
                     var targetStart = 0;
                     var sourceStart = 2;
                     var sourceEnd = length + sourceStart;
@@ -572,7 +572,7 @@ _.extend(JsonParse.prototype, Base.prototype, {
 
                     if (buffer.length  >  length + sourceStart) {
                         var overLen = length + sourceStart;
-                        var nextBuffer = new Buffer(buffer.length-overLen);
+                        var nextBuffer = Buffer.alloc(buffer.length-overLen);
                         buffer.copy(nextBuffer,0,overLen,buffer.length);
                         //_expect : function(data,opcode)
                         this._expect(nextBuffer);
@@ -589,12 +589,12 @@ _.extend(JsonParse.prototype, Base.prototype, {
                         this._addToOverflow(buffer);
                         return;
                     }
-                    targetBuffer = new Buffer(extendedPayloadLen);
+                    targetBuffer = Buffer.alloc(extendedPayloadLen);
                     buffer.copy(targetBuffer,0,4,sourceEnd);
 
                     this._sendMessage(targetBuffer);
                     if (buffer.length >  sourceEnd) {
-                        var nextBuffer = new Buffer(buffer.length-sourceEnd);
+                        var nextBuffer = Buffer.alloc(buffer.length-sourceEnd);
                         buffer.copy(nextBuffer,0,sourceEnd,buffer.length);
                         this._expect(nextBuffer);
                     }
