@@ -38,12 +38,21 @@ node index.js -t dev
 	use
 	Garam.getDB('mysqltest').getModel('modelName').getUserFunc();
 	
-	
+#model 
+ application/model/mysqltest / create user model name .js
     
  # cluster mode
   
  clusterMode : true  //서버는 클러스터로 동작 할 수 도 있고, 싱글모드로 동작할 수 도있다.  
  
+ # master send work packet
+ var testMessage = this.getTransaction('testMessage').addPacket({msg:'test'})
+  Garam.getWorker().send(testMessage);
+  Or 
+  Garam.getMaster().send(int workerId, testMessage);  //특정 워커에게
+  Garam.getMaster().sendAll( testMessage);            // 모든 워커에게
+   
+   
  # webserver cpu auto
  
    "portInfo":{
