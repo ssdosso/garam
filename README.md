@@ -104,7 +104,10 @@ node index.js -t dev
        }]
      },
    
-   
+ 
+ # transactions
+  모든 transaction 패킷은 압축하여 전송된다
+  특정한 바이트를 넘어서면 일정한 크기로 분리시켜서 분할 전송한다.
    
  # controllers
    
