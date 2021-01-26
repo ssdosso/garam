@@ -45,14 +45,25 @@ node index.js -t dev
   
  clusterMode : true  //서버는 클러스터로 동작 할 수 도 있고, 싱글모드로 동작할 수 도있다.  
  
- # master send work packet
+ # master send worker packet
  var testMessage = this.getTransaction('testMessage').addPacket({msg:'test'})
   Garam.getWorker().send(testMessage);
   Or 
   Garam.getMaster().send(int workerId, testMessage);  //특정 워커에게
   Garam.getMaster().sendAll( testMessage);            // 모든 워커에게
    
-   
+ # response transactions
+   application/transactions/worker/testMessage.js
+   addEvent : function(master) {
+      
+        master.on('testMessage',function(eventType,result){
+           
+        });
+    }
+ # worker send master packet   
+     var testMessage = this.getTransaction('testMessage').addPacket({msg:'test'})
+    Garam.getWorker().send(testMessage);
+    
  # webserver cpu auto
  
    "portInfo":{
@@ -61,23 +72,15 @@ node index.js -t dev
      "portType" : 0,
      "defaultPort" : 8080
    },
-   
-# webserver number maxCount 
-    //portType 이 1 이면 8080 에서 부터 순차적으로 포트 번호를 부여한다.
-   
-   
-     "portInfo":{
-       "mode" :"number",
-       "maxCount":3,
-       "portType" : 1,
-       "defaultPort" : 8080
-     },
- 
- 
-     portType = 1;
-	 listen Port 8080, 8081,8082
-	  
- 
+# webServer listion Type
+     portInfo.mode : cpu Or number 
+     cpu : cpu  core 만큼 클러스터 증가
+     number : maxCount 만큼 임의로 클러스터 증가
+     portType :  0 증가한 클러스터가 모두 같은 port 를 listen 
+                 1 port  번호가 1씩 증가
+     defaultPort :  기본 부여된  port
+		 
+
  
  # remote  (Role to client server)
  
@@ -103,15 +106,25 @@ node index.js -t dev
    
    
    
-  #controllers
-   application/controllers 폴더에 파일을 여러개 생성하면 참조 가능
+ # controllers
    
-   해당 폴더에 규칙에  맞쳐 파일을 생성하면 된다.
+   application/controllers 파일을 생성하면 된다
    
-   사용예 ) Garam.getCtl('app').func();
+      exports.app  =App;
+      exports.className  = 'testCtl'; //
    
+      Garam.getCtl('testCtl').callFunc();
+      
+      createRouter : functoin() {
+      
+      }
+      
+  # controllers transactions 
+    각  controller 에는 하나의 대칭되는 transaction 를 참조하게 된다.
+    
+    ex)  application/transactions/testCtl/testMessage.js
    
-   #routers
+  # routers
    
    application/routers 폴더에 파일을 여러개 생성하면 참조 가능
    
