@@ -109,6 +109,17 @@ node index.js -t dev
   모든 transaction 패킷은 압축하여 전송된다
   특정한 바이트를 넘어서면 일정한 크기로 분리시켜서 분할 전송한다.
    
+   this._packet = {
+            pid : 'tournamentCreateReq',
+            tournamentId : 0,
+            gameTime : 0,
+            prizePool :0,
+            delayTime :0
+
+        }
+	
+ 패킷은  JSON 포멧으로 압축한다.	
+	
  # controllers
    
    application/controllers 파일을 생성하면 된다
