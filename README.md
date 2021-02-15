@@ -19,7 +19,8 @@ node index.js -t dev
 
 # db support MYSQL, MSSQL, REDIS, memory [다중 DB 지원]
 
-//conf/default.json
+ 가장 큰 장점은 같은 인터페이스로 여러가지 다양한 DB를 접속하며 사용할 수 있다는 것이다.
+ Redis 와 mssql 이 사용법이 동일함.
 
 
 
@@ -35,8 +36,8 @@ node index.js -t dev
       "connLimit" :1            //mysql 에서는 1에서 늘리면 안된다.
     }
     
-	use
-	Garam.getDB('mysqltest').getModel('modelName').getUserFunc();
+use
+Garam.getDB('mysqltest').getModel('modelName').getUserFunc();
 	
 #model 
  application/model/mysqltest / create user model name .js
