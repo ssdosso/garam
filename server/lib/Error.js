@@ -15,26 +15,29 @@ exports = module.exports = Error;
 
 function Error (mgr, name) {
     Base.prototype.constructor.apply(this,arguments);
-    this.errorMsg ={};
-};
+    this.errorList = {
+        SystemError:1,
+        GameTypeError:2,
+        ClientVersionError:3
+    };
+}
 
 _.extend(Error.prototype, Base.prototype, {
-    SystemError : 1, //정상적인 시스템 이라면 나올 수 없는 경우
-    DatabaseError:2,
-    NotLoginError : 3,//: Login 하지 않은 유저
-    PacketDataTypeError : 4,
-    InvalidActionReq : 5,
-    InvalidError:7,
-    BetError:8,
-    BetBalanceError:9,
-    NotFoundGame :1002,
-    addErrorCode : function (errorName,code,msg) {
-        this[errorName] = code;
-        this.errorMsg[code]= msg;
-    },
 
-    getCode : function (errorName) {
-        return this[errorName] ? this[errorName] : this.SystemError;
+    addErrorCode : function (errorName,code,msg) {
+
+        this.errorList[errorName]= {
+            code :code,
+            msg :msg,
+            errorName:errorName
+        };
+    },
+    getErrorList : function () {
+      return this.errorList;
+    },
+    getError : function (errorName) {
+        return this.errorList[errorName] ? this.errorList[errorName] : this.errorList.SystemError;
     }
+
 
 });

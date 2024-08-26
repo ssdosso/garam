@@ -8,24 +8,27 @@ var _ = require('underscore')
     , domain = require('domain')
 //, HostServer = require('./server')
     , assert= require('assert');
-var packetMessage = {"heartbeat timeout" : 140,"heartbeat interval":120};
+let packetMessage = {"heartbeat timeout" : 140,"heartbeat interval":120};
 exports = module.exports = Server;
 
 function Server () {
     JsonParse.prototype.constructor.apply(this,arguments);
     this.options = {};
+    this._client = false;
     this.disconnected = false;
 
     this.listenPort = [];
     this.remoteIP = '';
     this.setOpcodeHandlers();
+    this.id = this.generateId();
 
 
-};
+}
 
 _.extend(Server.prototype, JsonParse.prototype, {
     startConnect : function(options,callback) {
         var self = this;
+        this._client = true;
 
         for (var i in options) {
             this.options[i] = options[i];
@@ -83,6 +86,7 @@ _.extend(Server.prototype, JsonParse.prototype, {
                 if (typeof self.socket !== 'undefined') {
 
                     Garam.logger().warn('disconnected to',self.options.hostname);
+                    Garam.getTransport().emit('disconnected:'+self.options.hostname)
                     self._clearHeartbeatTimeout();
                     self.socket.end();
                 }
@@ -101,6 +105,10 @@ _.extend(Server.prototype, JsonParse.prototype, {
         //});
 
 
+    },
+    generateId : function() {
+        return Math.abs(Math.random() * Math.random() * Date.now() | 0).toString()
+            + Math.abs(Math.random() * Math.random() * Date.now() | 0).toString();
     },
     getHostname : function () {
         return this.options.hostname;
@@ -122,7 +130,7 @@ _.extend(Server.prototype, JsonParse.prototype, {
     },
 
     _onHeartbeatClear: function() {
-       // Garam.logger().info('clear heartbeat client');
+        // Garam.logger().info('clear heartbeat client');
         this._clearHeartbeatTimeout(); //타이머를 제거한다.
         this._setHeartbeatInterval();
     },
@@ -131,23 +139,18 @@ _.extend(Server.prototype, JsonParse.prototype, {
      * @private
      */
     _setHeartbeatInterval: function() {
-        if (!this._heartbeatInterval) {
-            var self = this;
 
 
-            this._heartbeatInterval = setTimeout(function () {
-                self._heartbeat();
-                self._heartbeatInterval = null;
-            },packetMessage["heartbeat interval"] * 1000);
-           // Garam.logger().info('set heartbeat interval for dc', this.options.hostname,this.options.port);
-        }
+
+        this._heartbeat();
+
     },
     _clearHeartbeatTimeout: function() {
         if (this._heartbeatTimeout) {
 
             clearTimeout(this._heartbeatTimeout);
             this._heartbeatTimeout = null;
-          //  Garam.logger().info('cleared heartbeat timeout for client');
+            //  Garam.logger().info('cleared heartbeat timeout for client');
         }
 
         if (this._heartbeatInterval) {
@@ -155,7 +158,7 @@ _.extend(Server.prototype, JsonParse.prototype, {
             clearTimeout(this._heartbeatInterval);
 
             this._heartbeatInterval = null;
-           // Garam.logger().info('cleared heartbeat timeout for client');
+            // Garam.logger().info('cleared heartbeat timeout for client');
         }
     },
     /**
@@ -163,7 +166,10 @@ _.extend(Server.prototype, JsonParse.prototype, {
      * @private
      */
     _setHeartbeatTimeout: function() {
+
+        let heartbeatTimeout = Garam.get('heartbeat').heartbeatTimeout;
         if (!this._heartbeatTimeout) {
+
             var self = this;
 
             this._heartbeatTimeout = setTimeout(function () {
@@ -173,10 +179,13 @@ _.extend(Server.prototype, JsonParse.prototype, {
 
 
 
-            }, packetMessage["heartbeat timeout"] * 1000);
+            }, heartbeatTimeout * 1000);
 
             //sv.logger.info('set heartbeat timeout for client', this.getServerName());
         }
+    },
+    getServerName : function () {
+
     },
     _heartbeat: function(){
         if (!this.disconnected) {

@@ -21,7 +21,7 @@ function ChildServer () {
 }
 
 _.extend(ChildServer.prototype,BaseProcessFactory.prototype,{
-    create : function(callback) {
+    create : async function(callback) {
         var self = this;
         var worker = Garam.getCluster().getWorker();
         this.worker = worker.child;
@@ -30,10 +30,13 @@ _.extend(ChildServer.prototype,BaseProcessFactory.prototype,{
 
             self.onMessage(message);
         });
-        this.addTransactions('worker',this,function(){
-            self.setTransactionEvent(self.worker);
-            callback();
-        });
+
+        await this.addTransactions('worker',this);
+        this.setTransactionEvent(this.worker);
+        // this.addTransactions('worker',this,function(){
+        //     self.setTransactionEvent(self.worker);
+        //     callback();
+        // });
         // this.send('startChildServer');
     },
     isMaster : function() {

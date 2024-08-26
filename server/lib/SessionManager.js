@@ -22,7 +22,7 @@ function SessionManager (mgr, name) {
     Base.prototype.constructor.apply(this,arguments);
     this.sessions = {};     // sid -> session
     this.uidMap = {};       // uid -> sessions
-};
+}
 
 _.extend(SessionManager.prototype, Base.prototype, {
     create : function(sid,  socket) {

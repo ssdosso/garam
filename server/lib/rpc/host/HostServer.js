@@ -17,19 +17,24 @@ function Server (options) {
     this.options = options;
     this._client = {};
     this.open = {};
+    this.readyState =false;
 
-};
+}
 
 _.extend(Server.prototype, Base.prototype, {
     create : function(server) {
 
 
     },
+    isReadyState : function () {
+        return this.readyState;
+    },
     listen : function(callback) {
-        var self = this;
+        let self = this;
         this._server = Net.createServer();
         this._server.listen(this.options.port,function(){
             console.log(' Net listening on port '+self.options.port);
+            self.readyState = true;
             callback();
         });
 

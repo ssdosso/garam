@@ -156,24 +156,18 @@ module.exports  = DB_driver.extend({
                                     secondClient.auth(self.get('auth'));
                                 }
 
-                                secondClient.select(self.get('database'),function(){
+                                secondClient.select(self.get('database'),async function(){
 
-                                    nohm.setPubSubClient(secondClient, function (err) {
-                                        if (err) {
-                                            console.log('Error while initializing the second redis client');
+                                    await nohm.setPubSubClient(secondClient);
+                                    if (typeof callback === 'function') {
+                                        if (self.get('cluster') ==true) {
+                                            clusterConnection(callback);
                                         } else {
-                                            if (typeof callback === 'function') {
-                                                if (self.get('cluster') ==true) {
-                                                    clusterConnection(callback);
-                                                } else {
-                                                    callback();
-                                                }
-
-
-                                            }
-
+                                            callback();
                                         }
-                                    });
+
+
+                                    }
 
                                 });
 
@@ -205,34 +199,22 @@ module.exports  = DB_driver.extend({
                 _connection(spo_callback);
 
                 return {
-
+                    getPort : function () {
+                        return self.get('port');
+                    },
+                    getHostName : function () {
+                        return self.get('hostname');
+                    },
                     isConn : function() {
                         return conn ? true : false;
                     },
-                    // close : function() {
-                    //     //conn.close();
-                    //     //delete conn;
-                    //     if (!readConn) {
-                    //         readConn.end(false);
-                    //         readConn = null;
-                    //     }
-                    //     conn.end(false);
-                    //     conn = null;
-                    // },
+
                     close : function() {
                         conn.end(true);
                         delete conn;
                         conn = null;
                     },
-                    reConnect : function(callback) {
-                        this.close();
 
-                        console.log('dedlete !!!!')
-                        _connection(function(){
-
-                            callback(false,conn);
-                        });
-                    },
                     getConnection : function(callback) {
                         if (!conn) {
                             _connection(function(){
@@ -266,7 +248,7 @@ module.exports  = DB_driver.extend({
                                 callback(null);
                             });
                         } else {
-                            callback('fail')
+                            callback('fail');
                         }
                     }
                 }

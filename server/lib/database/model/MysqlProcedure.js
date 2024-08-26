@@ -5,6 +5,7 @@ var EventEmitter = require('events').EventEmitter
     , Mssql  = require('mssql')
     , format = require('util').format
     , assert= require('assert');
+const console = require("console");
 
 exports = module.exports = DB_SQL;
 
@@ -15,6 +16,7 @@ function DB_SQL () {
     this._query = '';
     this._ready = false;
     this._stream = false;
+    this._connectError = false;
     this._input = {};
     this._output = {};
     this._model =  new Backbone.Collection();
@@ -47,11 +49,14 @@ function DB_SQL () {
         'geography':null,
         'geometry':null,
     }
+
+    this._job =[];
+    this._currentDebug =0;
 }
 
 
 _.extend(DB_SQL.prototype, EventEmitter.prototype, {
-    create : function() {},
+    create : async function() {},
     run : function() {
 
     },
@@ -63,6 +68,15 @@ _.extend(DB_SQL.prototype, EventEmitter.prototype, {
     },
     setReady : function() {
         this._ready = true;
+    },
+    isConnectError : function () {
+        return this._connectError;
+    },
+    unsetConnectError : function () {
+        this._connectError = false;
+    },
+    setConnectError : function () {
+        this._connectError = true;
     },
     setStream : function(stream) {
         this._stream = true;
@@ -126,7 +140,7 @@ _.extend(DB_SQL.prototype, EventEmitter.prototype, {
         return packet;
     },
     addData : function(data) {
-       // console.log(data)
+        // console.log(data)
         var self = this;
         if (_.isArray(data)) {
             _.each(data,function(row){
@@ -134,22 +148,49 @@ _.extend(DB_SQL.prototype, EventEmitter.prototype, {
                 self._model.add(row);
             });
         }
-       // this._model.add({});
+        // this._model.add({});
     },
     getModel : function() {
         return this._model;
     },
-    getConnection : function (mode) {
-        var self = this;
+    getTransactionConnection :  function () {
+        let self = this,write=true;
         return new Promise(function(resolved,rejected){
-            Garam.getDB(self.namespace).connection().getConnection(function(err,conn) {
+
+
+            Garam.getDB(self.namespace).connection().getWriteConnection(function(err,conn) {
                 if (err) {
-                    Garam.logger().error('database  ',self.namespace,err);
+
                     return rejected(err);
 
                 }
 
 
+                if (self.isConnectError() || err == null) {
+
+                    self.unsetConnectError();
+                }
+
+                return resolved(conn);
+
+            },write);
+        });
+
+    },
+    getConnection :  function (mode) {
+        let self = this;
+        return new Promise(function(resolved,rejected){
+
+
+            Garam.getDB(self.namespace).connection().getConnection(function(err,conn) {
+                if (err) {
+                    return rejected(err);
+                }
+
+
+                if (self.isConnectError() || err == null) {
+                    self.unsetConnectError();
+                }
 
                 return resolved(conn);
 
@@ -157,16 +198,218 @@ _.extend(DB_SQL.prototype, EventEmitter.prototype, {
         });
 
     },
-    execute : function(query,parmas,mode,debug) {
+    commit : async function (connection) {
+        return new Promise((resolved,rejected)=>{
 
-        var self = this;
+
+            connection.commit(function(err) {
+                if (err) {
+                    connection.rollback(function() {
+                        rejected(err);
+                    });
+                } else {
+                  //  console.log('# connection.__currentJob', connection.__currentJob)
+                  //  delete connection.__currentJob;
+
+                   // console.log('커밋 완료',connection._job[connection.threadId],connection.threadId);
+                   //  if (typeof connection._job !== "undefined" && typeof connection._job[connection.threadId] !== "undefined") {
+                   //      //console.log('커밋 삭제',connection._job[connection.threadId],connection.threadId);
+                   //      delete connection._job[connection.threadId];
+                   //  }
+
+
+                    connection.release();
+                    // connection.release();
+                    resolved();
+                }
+
+            });
+        });
+
+    },
+    beginTransaction : async function() {
+        let transMode = 2;
+
+        function makeid() {
+            var text = "";
+            var possible = "abcdefghijklmnopqrstuvwxyz0123456789";
+
+            for (var i = 0; i < 8; i++) {
+                text += possible.charAt(Math.floor(Math.random() * possible.length));
+            }
+            //  text = '_'+text;
+
+            return text;
+        }
+
+        return new Promise(async (resolved,rejected)=> {
+            this.getTransactionConnection(transMode)
+                .then((connection) => {
+                    if (Garam.getDB(this.namespace).connection().isDebug() ===true) {
+
+                        // let currentJob = makeid();
+                        // if (typeof connection._job === 'undefined') {
+                        //     connection._job = {};
+                        //     connection._jobquery ={};
+                        //     connection._jobTime ={};
+                        // }
+                        // connection._jobTime[connection.threadId]= new Date();
+                        // connection._job[connection.threadId]= currentJob;
+                        // connection._jobquery[connection.threadId] =[];
+                    }
+                    // setTimeout(()=>{
+                    //
+                    //     if (typeof connection._job !== "undefined" && typeof connection._job[connection.threadId]  !== 'undefined' && connection._jobTime[connection.threadId]) {
+                    //         Garam.logger().error(connection._jobquery[connection.threadId],  connection._jobTime[connection.threadId])
+                    //         assert(0,'Error Mysql Transaction:'+connection._job[connection.threadId]+'_'+connection.threadId);
+                    //     }
+                    // },1000*5);
+
+                    connection.beginTransaction(async (error) => {
+                        if (error) {
+                            return connection.rollback(function() {
+                                throw error;
+                            });
+                        } else {
+
+
+                            resolved(connection);
+
+                        }
+                    });
+                })
+                .catch((err)=>{
+
+                    rejected(err);
+                });
+
+        });
+    },
+    rollback : async function (connection) {
+        return new Promise((resolved,rejected)=>{
+
+            // if (typeof connection._job !== "undefined" && typeof connection._job[connection.threadId] !== "undefined") {
+            //
+            //     delete connection._job[connection.threadId];
+            // }
+
+            connection.rollback(function(err) {
+
+                connection.release();
+                if (err) {
+                    rejected(err);
+                } else {
+                    resolved();
+                }
+
+
+
+            });
+        });
+
+    },
+
+    /**
+     *   connection.release(); 를 반드시 별도로 해줘야 한다.
+     * @param connection
+     * @param query
+     * @param params
+     * @returns {Promise<unknown>}
+     */
+    queryAsync : async function (connection,query,params,mode,debug) {
+        let self = this;
+
+
+        return new Promise((resolved,rejected)=>{
+
+            let q;
+
+            // if (Garam.getDB(this.namespace).connection().isDebug() ===true) {
+            //     connection._jobquery[connection.threadId].push(query);
+            // }
+             q =  connection.query(query, params, function (error, results, fields) {
+                //
+
+                if (debug) {
+                    Garam.logger().info(q.sql)
+                }
+
+                if (error) {
+                    Garam.logger().error('mysql errorNo:',error.errno);
+                    Garam.logger().error('mysql code:',error.code);
+                    Garam.logger().error('mysql syscall:',error.code);
+                    Garam.logger().error(q.sql)
+                    Garam.logger().error(self.namespace,self.dpname,'mysql sqlMessage:',error.sqlMessage);
+                    rejected(error);
+                } else {
+                    resolved(results);
+                }
+
+
+
+            });
+        });
+
+
+    } ,
+    executeAsync : async function(query,params =[],mode =1,debug =false) {
+        let self = this;
+        if (typeof mode ==='undefined') mode = 1;
+        return new Promise((resolved,rejected)=>{
+
+            if (!_.isArray(params)) {
+                rejected('invalid array type');
+            } else {
+
+                self.getConnection(mode)
+                    .then(function(connection){
+
+
+                        let q = connection.query(query, params, function (error, results, fields) {
+                            connection.release();
+                            if(error) {
+                                Garam.logger().error('mysql errorNo:',error.errno);
+                                Garam.logger().error('mysql code:',error.code);
+                                Garam.logger().error('mysql syscall:',error.code);
+                                Garam.logger().error(q.sql)
+                                Garam.logger().error(self.dpname,'mysql sqlMessage:',error.sqlMessage);
+                                return rejected('mysqlError code:'+error.code);
+                            } else {
+                                resolved(results)
+                            }
+
+                        });
+
+                        if(debug) console.log(q.sql);
+                    })
+                    .catch(function(err){
+
+                        if (err.errno ===-4078) {
+
+                            Garam.logger().error('mysql connect error');
+                            self.setConnectError();
+                        }
+                        Garam.logger().error('mysql errorNo',err.errno);
+                        Garam.logger().error('mysql code',err.code);
+                        Garam.logger().error('mysql syscall',err.code);
+                        rejected('mysqlError code',err.code,query);
+                    })
+            }
+
+
+        });
+    },
+    execute :  function(query,parmas,mode,debug) {
+
+        let self = this;
         return new Promise(function(resolved,rejected){
             if (!_.isArray(parmas)) {
                 return rejected('invalid array type');
             }
             self.getConnection(mode)
                 .then(function(connection){
-                   var q = connection.query(query, parmas, function (error, results, fields) {
+
+                    let q = connection.query(query, parmas, function (error, results, fields) {
                         connection.release();
                         if(error) {
                             Garam.logger().error(query);

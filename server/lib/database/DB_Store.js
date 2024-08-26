@@ -12,7 +12,7 @@ exports = module.exports = DB_Store;
 function DB_Store (namespace) {
     this._sql_list = {};
     this.namespace = namespace;
-};
+}
 
 
 _.extend(DB_Store.prototype, EventEmitter.prototype, {

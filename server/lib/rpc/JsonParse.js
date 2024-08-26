@@ -56,7 +56,7 @@ _.extend(JsonParse.prototype, Base.prototype, {
             assert(0,'message 는  Object 형식이어야만 합니다.');
         }
 
-        if (Garam.get('ispacket')) {
+        if (Garam.get('ispacket') && message.pid !== "heartbeat") {
 
             Garam.logger().packet('send  ' +JSON.stringify(message));
         }
@@ -531,6 +531,8 @@ _.extend(JsonParse.prototype, Base.prototype, {
 
             },
             3: function (buffer) {
+
+
                 if (buffer.length ==2) {
 
                     this._onHeartbeatClear();

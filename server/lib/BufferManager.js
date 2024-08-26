@@ -13,7 +13,7 @@ exports = module.exports = BufferManager;
 function BufferManager (mgr, name) {
     Base.prototype.constructor.apply(this,arguments);
     this.buffers = {};
-};
+}
 
 _.extend(BufferManager.prototype, Base.prototype, {
     createBuffer : function(options) {
@@ -24,7 +24,7 @@ _.extend(BufferManager.prototype, Base.prototype, {
             assert(0,'options.name does not exist');
         }
 
-        this.buffers[options.name] = new buffer();
+        this.buffers[options.name] =  Buffer.alloc();
         this.buffers[options.name] .create(options);
         return this.buffers[options.name];
     },
@@ -76,7 +76,7 @@ function buffer (mgr, name) {
     Base.prototype.constructor.apply(this,arguments);
 
 
-};
+}
 
 _.extend(buffer.prototype, Base.prototype, {
     create : function(options){
@@ -164,7 +164,7 @@ _.extend(buffer.prototype, Base.prototype, {
         for (var i in list) {
             buffers.push(list[i].buffer);
         }
-        var buf = Buffer.concat(buffers);;
+        var buf = Buffer.concat(buffers);
 
         for ( var i in this.fields ) {
             this.write(i,0); //초기화

@@ -23,7 +23,8 @@ function ClusterBase () {
 _.extend(ClusterBase.prototype,EventEmitter.prototype,{
 
     getTransaction : function(pid) {
-        if(this._transactions[pid]) {
+
+        if( this._transactions[pid]) {
             return this._transactions[pid];
         } else {
             Garam.logger().error('not found transaction',pid)
@@ -39,40 +40,60 @@ _.extend(ClusterBase.prototype,EventEmitter.prototype,{
     },
     setTransactionEvent : function(cluster) {
 
-        for (var transactionPid in this._transactions) {
+
+        for (let transactionPid in this._transactions) {
             (function(transaction,transactionPid){
                 transaction.removeEvent(cluster);
                 transaction.addEvent(cluster);
             }).call(this,this._transactions[transactionPid],transactionPid);
         }
     },
-    addTransactions : function(dir,worker,callback) {
+    addTransactions : async function(dir,worker) {
+
         var dir =  Garam.get('appDir') +'/transactions/'+dir,self = this;
         if(!fs.existsSync(dir)) {
             Garam.error('not find transDir' +dir);
             return;
         }
+
+
         this._transactions = {};
       //  Garam.getInstance().setTransactions(this._transactions,this.className);
         var list = fs.readdirSync(dir);
         var total =list.length;
-        if (list.length ===0) {
-            callback();
-            return;
-        }
-        list.forEach(function (file,i) {
-            var stats = fs.statSync(dir + '/'+ file);
-            if (stats.isFile()) {
-                var Transaction = require(process.cwd()+'/'+dir + '/'+ file);
-                var t = new Transaction;
-                t.create(worker);
-                self.addTransaction(t);
-            }
-            if (total === (i+1)) {
-                callback();
-            }
+        // if (list.length ===0) {
+        //     return;
+        // }
 
-        });
+
+
+        for await (let transFile of list) {
+            ((file)=>{
+                let stats = fs.statSync(dir + '/'+ file);
+
+                if (stats.isFile()) {
+                    let Transaction = require(process.cwd()+'/'+dir + '/'+ file);
+                    let t = new Transaction;
+                    t.create(worker);
+                    self.addTransaction(t);
+                }
+            })(transFile);
+
+        }
+
+        // list.forEach(function (file,i) {
+        //     var stats = fs.statSync(dir + '/'+ file);
+        //     if (stats.isFile()) {
+        //         var Transaction = require(process.cwd()+'/'+dir + '/'+ file);
+        //         var t = new Transaction;
+        //         t.create(worker);
+        //         self.addTransaction(t);
+        //     }
+        //     if (total === (i+1)) {
+        //         callback();
+        //     }
+        //
+        // });
     }
 
 });

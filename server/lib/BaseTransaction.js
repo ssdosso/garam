@@ -41,6 +41,31 @@ _.extend(BaseTransaction.prototype, Base.prototype, {
             user.removeAllListeners([this.pid]);
         }
     },
+
+    createPacket : function (data ={},targetPid) {
+
+        if (typeof data === 'undefined') {
+            data = {};
+        }
+        let packet = this.getPacket();
+
+        for(let i in packet) {
+
+            if (data[i] || data[i] === false || data[i] === 0) {
+                packet[i] = data[i];
+            }
+
+        }
+        if (typeof packet.pid ==='undefined') {
+            packet.pid = this.pid;
+        }
+        if (typeof targetPid !== 'undefined') {
+            packet.pid = targetPid;
+        }
+
+
+        return packet;
+    },
     getPacket : function() {
         if (!this._packet) {
             assert(0);

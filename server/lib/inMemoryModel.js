@@ -106,7 +106,7 @@ _.extend(Model.prototype, EventEmitter.prototype, {
         //     this.setId(obj.id);
         // }
         this._setProcedure();
-        var options,procedure;;
+        var options,procedure;
         if (obj.proceduresOptions) {
          for(var procedureType in obj.proceduresOptions) {
               options = obj.proceduresOptions[procedureType];
@@ -340,7 +340,7 @@ _.extend(Model.prototype, EventEmitter.prototype, {
         });
 
         // assert(this.indexField);
-        // var id = model.p(this.indexField);
+        // var id = model.property(this.indexField);
         //
         // model.remove({ // options object can be omitted
         //     silent: false, // whether remove event is published. defaults to false.
@@ -370,7 +370,7 @@ _.extend(Model.prototype, EventEmitter.prototype, {
             callback('Not Found Save Data');
             return;
         }
-        model.p(obj);
+        model.property(obj);
         model.save(function(err){
             if (err === 'invalid') {
                 console.log('properties were invalid: ', model.errors);
@@ -608,7 +608,7 @@ _.extend(Model.prototype, EventEmitter.prototype, {
 
                 var model = this.inmemory.createData();
                // console.log('params',params)
-                model.p(params);
+                model.property(params);
 
                 var query = this.queryString(model,procedure,'get');
                 // console.log('### q ' , query,model)
@@ -660,7 +660,7 @@ _.extend(Model.prototype, EventEmitter.prototype, {
         // var nohm = this.nohm;
         // var model = nohm.factory(this.name);
         var model = this.inmemory.createData(),self=this;
-        model.p(obj);
+        model.property(obj);
 
     
         var query = this.queryString(model,'set');
@@ -718,7 +718,7 @@ _.extend(Model.prototype, EventEmitter.prototype, {
                          
                             if (_.isObject(recordSet[i])) {
                                  model = self.inmemory.createData();
-                                 model.p(recordSet[i]);
+                                 model.property(recordSet[i]);
                                  models.push(model);
                             }
                         }

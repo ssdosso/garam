@@ -86,56 +86,18 @@ module.exports  = DB_driver.extend({
                     function _connection(callback) {
 
                             if (!conn) {
-
-                                if (self.get('connLimit')) {
-                                    var i = 0;
-                                    conn = [];
-                                    while(i< self.get('connLimit') ) {
-                                        (function(){
-
-                                            var dbConn = new Mssql.Connection(config, function (err) {
-                                                if (err) {
-                                                    Garam.logger().warn(self.get('namespace'),err);
-                                                }
-                                                conn.push(dbConn);
-
-                                                dbConn.on('close',function (err) {
-                                                    Garam.logger().error('close mssql database',self.get('hostname'));
-                                                });
-                                                if (conn.length === self.get('connLimit')) {
-
-                                                    callback();
-                                                }
-
-                                            });
-                                        })(i);
-                                        i++;
+                                conn = new Mssql.Connection(config, function (err) {
+                                    if (err) {
+                                        Garam.logger().warn(self.get('namespace'),err);
                                     }
-                                    //conn = new Mssql.Connection(config, function (err) {
-                                    //    if (err) {
-                                    //        Garam.logger().warn(err);
-                                    //    }
-                                    //
-                                    //    if (typeof callback === 'function') {
-                                    //        callback();
-                                    //    }
-                                    //
-                                    //});
-                                } else {
-                                    conn = new Mssql.Connection(config, function (err) {
-                                        if (err) {
-                                            Garam.logger().warn(self.get('namespace'),err);
-                                        }
-                                        conn.on('close',function (err) {
-                                            Garam.logger().error('close mssql database',self.get('hostname'));
-                                        });
-                                        if (typeof callback === 'function') {
-                                            callback();
-                                        }
-
+                                    conn.on('close',function (err) {
+                                        Garam.logger().error('close mssql database',self.get('hostname'));
                                     });
-                                }
+                                    if (typeof callback === 'function') {
+                                        callback();
+                                    }
 
+                                });
                             }
                     }
 

@@ -19,23 +19,26 @@ function System (mgr, name) {
 _.extend(System.prototype, Base.prototype, {
 
     cpuAverage : function() {
+        let cpus = os.cpus();
 
 
 
         //Initialise sum of idle and time of cores and fetch CPU info
-        var totalIdle = 0, totalTick = 0;
-        var cpus = os.cpus();
+        let totalIdle = 0, totalTick = 0;
+
+
+
 
 
         //Loop through CPU cores
-        for(var i = 0, len = cpus.length; i < len; i++) {
+        for(let i = 0, len = cpus.length; i < len; i++) {
 
             //Select CPU core
-            var cpu = cpus[i];
-
+            let cpu = cpus[i];
             //Total up the time in the cores tick
-            for(var type in cpu.times) {
+            for(let type in cpu.times) {
                 totalTick += cpu.times[type];
+
 
             }
 
@@ -48,7 +51,7 @@ _.extend(System.prototype, Base.prototype, {
         return {idle: totalIdle / cpus.length,  total: totalTick / cpus.length};
     },
     start : function() {
-        var self = this;
+        let self = this;
         this.logData = {cpuUsage:0,load_avg:[0,0,0]};
         this._loadavg1 = [0];
         this._loadavg5 = [0];
@@ -59,37 +62,37 @@ _.extend(System.prototype, Base.prototype, {
         setTimeout(function(){
             //if (Garam.getCluster().isMaster()) {
                 // self.startMonitoring();
-                var startMeasure = self.cpuAverage();
+                let startMeasure = self.cpuAverage();
 
                 setInterval(function(){
                     //console.log(  os.loadavg(15))
-                    var d = new Date(),  logs=self.logData ={cpuUsage:0,load_avg:[0,0,0]};
-                    //  logs.now = d.getFullYear() +'-' + (d.getMonth() + 1) + '-' + d.getDate() + ' ' + d.getHours() + ':' + d.getMinutes() +':'+d.getSeconds();
+                    let d = new Date(),  logs=self.logData ={cpuUsage:0,load_avg:[0,0,0]};
+                    //  logsModel.now = d.getFullYear() +'-' + (d.getMonth() + 1) + '-' + d.getDate() + ' ' + d.getHours() + ':' + d.getMinutes() +':'+d.getSeconds();
                     logs.now = d.getTime();
 
                     logs.load_avg = [];
                     logs.cpuUsage='';
-                    var endMeasure = self.cpuAverage();
+                    let endMeasure = self.cpuAverage();
 
                     //Calculate the difference in idle and total time between the measures
-                    var idleDifference = endMeasure.idle - startMeasure.idle;
-                    var totalDifference = endMeasure.total - startMeasure.total;
+                    let idleDifference = endMeasure.idle - startMeasure.idle;
+                    let totalDifference = endMeasure.total - startMeasure.total;
 
                     //Calculate the average percentage CPU usage
-                    var percentageCPU = 100 - ~~(100 * idleDifference / totalDifference);
+                    let percentageCPU = 100 - ~~(100 * idleDifference / totalDifference);
                     logs.cpuUsage = percentageCPU;
-                   // console.log('cpuUsage', logs.cpuUsage)
+                   // console.log('cpuUsage', logsModel.cpuUsage)
                     //Output result to console
                     // console.log(percentageCPU + "% CPU Usage.");
 
-                    var loadavg = os.loadavg();
+                    let loadavg = os.loadavg();
 
                     logs.load_avg.push(loadavg[0].toFixed(6));
                     logs.load_avg.push(loadavg[1].toFixed(6));
                     logs.load_avg.push(loadavg[2].toFixed(6));
-                  //    console.log(logs)
+                  //    console.log(logsModel)
 
-                    //  self.logData = logs;
+                    //  self.logData = logsModel;
                     //시스템의 최근 1,5,15 분의 시스템의 평균 부하량(Load Average)에 대한 정보
 
                 },1000*10 );

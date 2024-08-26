@@ -14,113 +14,110 @@ function Application(mod) {
 
 }
 _.extend(Application.prototype, EventEmitter.prototype, {
-    create : function() {
+    appCreate : async function() {
 
         this._controllers = {};
-
         this.appDir = Garam.getInstance().get('appDir');
         var self = this;
 
-        if(!fs.existsSync(this.appDir + '/controllers')) {
-            Garam.getInstance().log.info(this.appDir + '/controllers make appDir');
-            fs.mkdirSync(this.appDir + '/controllers');
-        }
-
-        var dir = process.cwd()+'/'+ this.appDir + '/controllers';
-        var list = fs.readdirSync(dir);
-        var total =list.length;
-
-        if(total === 0){
-            Garam.getInstance().log.error('controllers is empty');
-        }
-
-        var work =0;
-        list.forEach(function (file,i) {
+        return new Promise(async (resolve, reject) => {
+            
+            try {
+                if(!fs.existsSync(this.appDir + '/controllers')) {
+                    Garam.getInstance().log.info(this.appDir + '/controllers make appDir');
+                    fs.mkdirSync(this.appDir + '/controllers');
+                }
 
 
-            (function(job) {
-                var stats = fs.statSync(process.cwd()+'/'+ self.appDir + '/controllers/'+ file);
-                if (stats.isFile()) {
-                    var singletonController = require(process.cwd()+'/'+ self.appDir + '/controllers/'+ file);
-                    assert(singletonController.className);
-                    if(!singletonController.className) {
-                        Garam.getInstance().log.error('className does not exist');
-                        return;
-                    }
-                    self.addController(singletonController,function(){
-                        if (total === (job+1)) {
-                            Garam.getInstance().emit('applicationReady');
+                let dir = process.cwd()+'/'+ this.appDir + '/controllers';
+                let list = fs.readdirSync(dir);
+                let total =list.length;
+                if(total === 0){
+                    return reject('controllers is empty');
+                    //Garam.getInstance().log.error('controllers is empty');
+                }
+                for await(let file of list) {
+                    await (async (controllerFile) => {
+                        let stats = fs.statSync(process.cwd() + '/' + this.appDir + '/controllers/' + controllerFile);
+                        if (stats.isFile()) {
+                            let controller = require(process.cwd() + '/' + self.appDir + '/controllers/' + controllerFile);
+                            assert(controller.className);
+                            if (!controller.className) {
+                                return reject('className does not exist');
+                            }
+
+                            await this.appendController(controller);
+                            //Garam.getInstance().emit('applicationReady');
+                            // self.addController(controller, function () {
+                            //     if (total === (job + 1)) {
+                            //         Garam.getInstance().emit('applicationReady');
+                            //     }
+                            //
+                            // });
+                        } else {
+                            return reject('controller 는   does not exist');
                         }
-                        // work++;
-                        // if (total === work) {
-                        //
-                        //
-                        // }
+                    })(file);
+                }
+                Garam.getInstance().emit('applicationReady');
 
-                    });
+                resolve();
+            } catch (e) {
+                console.error(e);
+                reject('appCreate')
+            }
+
+        });
+
+
+    },
+    /**
+     * 컨트롤러 객체를 생성한다.
+     * @param application
+     * @param callback
+     * @returns {Promise<unknown>}
+     */
+    appendController: async function(application) {
+
+        return new Promise(async (resolve, reject) => {
+            try {
+                let controller = application.app,self=this;
+                let c = new controller;
+                let className = application.className.toLowerCase();
+                this._controllers[className] = c;
+                await this._controllers[className]._create(className);
+
+                if (  self._controllers[className].workerOnly === true && !Garam.isMaster()) {
+                    self._controllers[className].init();
+
+                } else if(self._controllers[className].workerOnly === true && Garam.isMaster()) {
 
                 } else {
-                    appFolder(file,function () {
 
-                    });
+                    self._controllers[className].init();
+
                 }
-            })(i);
-
-        });
-
-
-        function appFolder(folderName,callback) {
-            var subDir =  Garam.getInstance().get('appDir') +'/controllers/'+folderName;
-            var list = fs.readdirSync(subDir);
-            var total = list.length,singletonController;
-            if (list.length > 0) {
-                list.forEach(function (file,i) {
-                    (function(job) {
-                        var stats = fs.statSync(subDir + '/'+ file);
-                        if (stats.isFile()) {
-                            singletonController = require(process.cwd()+'/'+subDir+'/'+ file);
-                            assert(singletonController.className);
-                            if(!singletonController.className) {
-                                Garam.getInstance().log.error('className does not exist');
-                                return;
-                            }
-                            self.addController(singletonController,function(){
-                                if (total === (job+1)) {
-                                    callback();
-                                }
-                            });
-
-                        } else {
-                            assert(0);
-                        }
-
-                    })(i);
-
-                });
-            } else {
-                callback();
-            }
-        }
-    },
-    addController: function(application,callback) {
-
-        var controller = application.app,self=this;
-        var c = new controller;
-        var className = application.className.toLowerCase();
-        this._controllers[className] = c;
-        this._controllers[className]._create(className,function(){
-            if (  self._controllers[className].workerOnly === true && !Garam.isMaster()) {
-                self._controllers[className].init();
-                return callback();
-            } else if(self._controllers[className].workerOnly === true && Garam.isMaster()) {
-                return callback();
-            } else {
-
-                self._controllers[className].init();
-                return callback();
+                resolve();
+                // this._controllers[className]._create(className,function(){1
+                //     if (  self._controllers[className].workerOnly === true && !Garam.isMaster()) {
+                //         self._controllers[className].init();
+                //
+                //     } else if(self._controllers[className].workerOnly === true && Garam.isMaster()) {
+                //
+                //     } else {
+                //
+                //         self._controllers[className].init();
+                //
+                //     }
+                //
+                //     return resolve();
+                // });
+            } catch (e) {
+                reject('addController Error '+e)
             }
 
         });
+
 
 
     },

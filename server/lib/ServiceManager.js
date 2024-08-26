@@ -1,4 +1,4 @@
-var _ = require('underscore')
+const _ = require('underscore')
     , fs = require('fs')
     , Express = require('express')
     , Garam = require('./Garam')
@@ -8,6 +8,7 @@ var _ = require('underscore')
     , Http = require('http')
     , path = require('path')
     , assert= require('assert')
+    , moment = require('moment')
     , engine = require('ejs-locals')
     , request = require('request')
     , Cluster = require('cluster')
@@ -22,7 +23,6 @@ var _ = require('underscore')
 
 
 exports =  module.exports  = WebServiceManager;
-
 function WebServiceManager() {
     "use strict";
     Base.prototype.constructor.apply(this,arguments);
@@ -60,12 +60,15 @@ _.extend(WebServiceManager.prototype, Base.prototype, {
 
 
 
+
         if (options.SSL && options.SSL === true) {
             assert(options.secureOptions.pfx);
             secureOptions = {
                 pfx:fs.readFileSync(process.cwd() +'/key/'+options.secureOptions.pfx),
                 passphrase : options.secureOptions.passphrase
             };
+
+
         } else {
             secureOptions = null;
         }
@@ -120,8 +123,6 @@ _.extend(WebServiceManager.prototype, Base.prototype, {
                     var args = [].slice.call(arguments)
                     switch (req.method) {
                         case "POST":
-                         
-
                                // var params = ['POST:'+path].concat(args);
                                //
                            // console.log(['POST:'+path].concat(args))
@@ -165,12 +166,10 @@ _.extend(WebServiceManager.prototype, Base.prototype, {
         return this._listenStatus;
     },
     webInitialize: function(server,options) {
-        var app = this.app,scope=this;
+        let app = this.app,scope=this;
 
 
-
-
-        var allowCrossDomain =function(req, res, next) {
+        let allowCrossDomain =function(req, res, next) {
             if (typeof options.origin ==='undefined') {
                 assert(0,'환경설정 service.origin   형식의 origin 값을 추가해주세요')
             }
@@ -178,26 +177,36 @@ _.extend(WebServiceManager.prototype, Base.prototype, {
             if (typeof options.debug ==='undefined') {
                 assert(0,'환경설정 service.debug   boolean 형식의   값을 추가해주세요')
             }
-            var allowedOrigins = options.origin;
-            var origin = req.headers.origin;
+            let allowedOrigins = options.origin;
+            let origin = req.headers.host;
+            //console.log(req.headers);
 
-            if (!options.debug) {
-                if(allowedOrigins.indexOf(origin) > -1){
-                 //  res.header('Access-Control-Allow-Origin', origin);
-                }
-                res.header('Access-Control-Allow-Origin', '*');
+
+            if(_.indexOf(allowedOrigins,origin) > -1){
+
+                res.header('Access-Control-Allow-Origin', origin);
+
             } else {
                 res.header('Access-Control-Allow-Origin', '*');
             }
+
+            res.header("Access-Control-Allow-Headers", "X-Requested-With");
+
+
             res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS');
             res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Content-Length, X-Requested-With');
-            if ('OPTIONS' == req.method) {
-                res.send(200);
+            let time = moment().format('x') +moment().format('SSS');
+            res.header('timestamp',time);
+           // req._ntime = time;
+            if ('OPTIONS' === req.method) {
+                res.sendStatus(200);
             }
             else {
                 next();
             }
         };
+
+
 
 
         app.configure(function () {
@@ -207,22 +216,63 @@ _.extend(WebServiceManager.prototype, Base.prototype, {
             app.set('view engine', 'ejs');
             app.engine('ejs', engine);
 
-            var Ddos = require('ddos');
-            var ddos = new Ddos({
-                burst:100
-            });
+
+            //
+            // var Ddos = require('ddos');
+            // var ddos = new Ddos({
+            //     burst:100
+            // });
 
             var session = require('cookie-session');
             var bodyParser = require('body-parser');
 
             app.use(Cookies.express() );
-            app.use(ddos.express);
+            // app.use(Timeout('3s'));
+            // app.use(haltOnTimedout);
+            //
+            // function haltOnTimedout (req, res, next) {
+            //     if (!req.timedout) next();
+            // }
+            //app.use(ddos.express);
 
-            app.use(bodyParser.json());
+            app.use(function(req, res, next){
+                res.setTimeout(1000*60, function(){
+                    console.log(req)
+                    Garam.logger().error('Request has timed out.');
+                     res.sendStatus(408);
+                   // res.status(503).send({ sid: true,pingInterval:1, pingTimeout:1});
+                });
 
+                next();
+            });
+
+            app.use(function(req, res, next) {
+                let contentType = req.headers['content-type'] || ''
+                    , mime = contentType.split(';')[0];
+
+                if (Garam.get('serviceMode') === 'local') {
+                //    console.log('req.url ',req.url )
+                }
+
+                if (mime != 'text/plain') {
+                    return next();
+                }
+
+                let data = '';
+                req.setEncoding('utf8');
+                req.on('data', function(chunk) {
+                    data += chunk;
+                });
+                req.on('end', function() {
+                    req.rawBody = unescape(data);
+                    next();
+                });
+            });
+           app.use(bodyParser.json());
+           app.use(bodyParser.raw(options));
+           app.use(bodyParser.urlencoded({extended:true}));
+           // app.use(rawBody);
             app.set("jsonp callback", true);
-
-
 
 
 
@@ -268,9 +318,9 @@ _.extend(WebServiceManager.prototype, Base.prototype, {
             /**
              * 라우터가 준비 되면 발생 하는 이벤트
              */
-            Garam.getInstance().on('routerComplete',function(){
+            Garam.getInstance().on('routerComplete',function() {
              
-            
+
                 var serverErrorHandler = function(err,req, res, next) {
 
                     d.add(req);
@@ -287,31 +337,23 @@ _.extend(WebServiceManager.prototype, Base.prototype, {
                     });
                 };
 
-                if (options.debug) {
-                    Garam.logger().info('service Debug mode ');
-                    var errorhandler = require('errorhandler');
-                    app.use(errorhandler);
-                } else {
-                    app.use(serverErrorHandler);
-                }
+                app.use(serverErrorHandler);
 
-                app.use(function(req, res, next){
-                    res.setTimeout(1000*10, function(){
-                        console.log('Request has timed out.');
-                        res.status(408);
-                    });
 
-                    next();
-                });
 
                 app.use(function(req, res, next) {
-
-                        if (req.xhr) {
-                        res.status(404).send({ error: true });
+                     if (req.xhr) {
+                       res.status(404).send({ sid: true,pingInterval:1, pingTimeout:1});
                     } else {
-                        res.render('404');
+                       res.render('404', {});
+
                     }
                 });
+
+
+
+
+
 
             });
 
@@ -373,3 +415,4 @@ _.extend(WebServiceManager.prototype, Base.prototype, {
 
 
 var RouterFactory = require('./RouterFactory');
+const bodyParser = require("body-parser");

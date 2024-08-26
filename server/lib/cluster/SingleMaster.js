@@ -23,16 +23,15 @@ function MasterServer () {
 }
 
 _.extend(MasterServer.prototype,BaseProcessFactory.prototype,{
-    create : function(callback) {
+    create :async function(callback) {
         var self = this;
         /**
          * 워커에서 실제 포트가 열려 있으면....
          */
 
-        this.addTransactions('master',this,function(){
-            callback();
-        });
+        console.log('create single master ')
 
+        await this.addTransactions('master',this);
 
 
     },
@@ -44,20 +43,23 @@ _.extend(MasterServer.prototype,BaseProcessFactory.prototype,{
         var self = this;
         var worker = Garam.getCluster().fork();
         var workerId = worker.child.id;
-        
 
+
+
+        Garam.logger().info('master is single master')
         this._workers[workerId] = new BaseWorker();
         this._workers[workerId].create(worker,config,'single');
         //worker.child.on('message',function(message){
         //  console.log(message)
         //});
         this.setTransactionEvent(this._workers[workerId]);
+
+        //this.getInstance().listenService();
         //가상의 워커를 만든후에 이벤트를 마스터에게 보낸다.
         Garam.getInstance().createSingleWorker(function(){
             var workerOnReady = Garam.getWorker().getTransaction('workerOnReady').addPacket();
             Garam.getWorker().send(workerOnReady);
         });
-
     },
 
     getWorker : function(workerId) {

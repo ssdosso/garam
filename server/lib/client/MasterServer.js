@@ -13,7 +13,7 @@ function MasterServer () {
     Base.prototype.constructor.apply(this,arguments);
    
     this._childServerList =[];
-};
+}
 
 _.extend(MasterServer.prototype,{
     create : function (client,reconnection) {

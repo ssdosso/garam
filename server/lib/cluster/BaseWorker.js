@@ -21,6 +21,7 @@ _.extend(Worker.prototype, Base.prototype, {
         if (!Garam.get('clusterMode')) {
             this._worker = worker.master;
             this._child = worker.child;
+
         } else {
             this._worker = worker;
         }
@@ -54,11 +55,21 @@ _.extend(Worker.prototype, Base.prototype, {
 
         this._worker.on('exit', function( code, signal) {
 
-            Garam.logger().error('worker exit','port:'+self.config.port,'worker id:'+worker.id);
-            //setTimeout(function(){
-            //    Garam.getInstance().restartWorker(self.config,self);
-            //},1000*10);
+            if (signal) {
+                Garam.logger().error(`worker was killed by signal: ${signal}`);
+            } else if (code !== 0) {
 
+                Garam.logger().error(`worker exited with error code: ${code}`);
+            } else {
+                console.log('worker success!');
+            }
+
+
+            Garam.logger().error('worker exit','port:'+self.config.port,'worker id:'+worker.id);
+
+            setTimeout(()=>{
+                Garam.getInstance().restartWorker(self.config,self);
+            },1000*10)
 
         });
 
@@ -85,6 +96,7 @@ _.extend(Worker.prototype, Base.prototype, {
         var listenStartReq = Garam.getMaster().getTransaction('listenStartReq');
 
 
+        console.log('#this.config',this.config)
         this.send(listenStartReq.addPacket({config:this.config}));
 
     },

@@ -5,8 +5,8 @@ var _ = require('underscore')
     ,Garam = require('./Garam')
     , Base = require('./Base')
     , rawBodyParser = require('raw-body-parser')
-    , assert= require('assert');
-
+    , assert= require('assert')
+    , express = require('express');
 
 exports= module.exports = Router;
 function Router (mgr, name) {
@@ -15,11 +15,10 @@ function Router (mgr, name) {
 }
 
 
-
-
 _.extend(Router.prototype, Base.prototype, {
     init : function(app,webManager) {
         this.app = app;
+        this.app.use(express.static('../public'))
         this.webManager = webManager;
         this.start();
     },
@@ -53,68 +52,93 @@ _.extend(Router.prototype, Base.prototype, {
         }
 
     },
-    get : function(path,callback) {
-        var self = this;
+    getParams : function (req) {
+        let body = req.body || req.query;
+        return {
 
-        this.app.get(path,function(){
-            callback.apply(self,arguments);
-        });
-    },
-    postToJson : function () {
-        var self = this,path,callback,parser;
-        var args= [].slice.call(arguments);
-        path = args[0];
-        callback = args[1];
-        this.app.post(path,rawBodyParser(),function(req,res){
-            var rawBody = req.rawBody.toString('utf8');
-
-            if(typeof rawBody ==='undefined' || rawBody === null) {
-                req.body = {};
-            } else {
-                var params = rawBody.split('&'),data,outData={};
-
-                for (var i in params) {
-                    var currentStr = params[i];
-                    //console.log(currentStr)
-                    data =params[i].split('=');
-                    if (data.length >2) {
-                        var start = currentStr.indexOf(data[0]+'='),dataStart = start + data[0].length+1,startParameter;
-                        startParameter=currentStr.substring(start,data[0].length);
-
-                        outData[startParameter] = currentStr.substring(dataStart,currentStr.length);
-                    } else {
-                        outData[data[0]] =data[1];
-                    }
+            get : (name) => {
+                if (typeof body[name] ==='undefined') {
+                    return false;
                 }
-                req.body =outData;
 
+                return body[name];
             }
-
-
-            //req.body =require('querystring').unescape(rawBody);
-            callback.apply(self,arguments);
-        });
+        }
     },
-    post : function() {
-        var self = this,path,callback,parser;
-        var args= [].slice.call(arguments);
-        path = args[0];
-        callback = args[1];
-        if (Garam.getService().get('type') === 'http') {
-            var bodyParser = require('body-parser');
-            var urlencodedParser =bodyParser.urlencoded({extended: true});
+    get : function() {
+        let self = this,path,callback,parser;
+        let args= [].slice.call(arguments),next;
 
-            this.app.post(path,urlencodedParser,function(){
+        path = args.shift();
+        callback = args.pop();
+        if (args.length ===0) {
+            this.app.get(path,function(){
+                callback.apply(self,arguments);
+            });
+        } else {
+
+            next = args.shift();
+            this.app.get(path,next,function(){
                 callback.apply(self,arguments);
             });
 
+        }
+    },
+
+    del : function() {
+        let self = this,path,callback,parser;
+        let args= [].slice.call(arguments),next;
+
+        path = args.shift();
+        callback = args.pop();
+        if (args.length ===0) {
+            this.app.del(path,function(){
+                callback.apply(self,arguments);
+            });
         } else {
+            next = args.shift();
+            this.app.del(path,next,function(){
+                callback.apply(self,arguments);
+            });
+        }
+    },
+
+    put : function() {
+        let self = this,path,callback,parser;
+        let args= [].slice.call(arguments),next;
+
+        path = args.shift();
+        callback = args.pop();
+        if (args.length ===0) {
+            this.app.put(path,function(){
+                callback.apply(self,arguments);
+            });
+        } else {
+            next = args.shift();
+            this.app.put(path,next,function(){
+                callback.apply(self,arguments);
+            });
+        }
+    },
+    post : function() {
+        let self = this,path,callback,parser;
+        let args= [].slice.call(arguments),next;
+        // path = args[0];
+        // callback = args[1];
+        path = args.shift();
+        callback = args.pop();
+        if (args.length ===0) {
             this.app.post(path,function(){
+                callback.apply(self,arguments);
+            });
+        } else {
+            next = args.shift();
+            this.app.post(path,next,function(){
                 callback.apply(self,arguments);
             });
         }
 
-
+        //  this.app.post.apply(self,arguments)
 
     },
     render : function(res,req,variables) {
@@ -144,7 +168,6 @@ _.extend(Router.prototype, Base.prototype, {
         var jsonData = JSON.stringify(data);
         res.send(jsonData);
     }
-
 });
 
 Router.extend = Garam.extend;

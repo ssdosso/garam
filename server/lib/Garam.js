@@ -1,5 +1,5 @@
 
-
+"use strict";
 /**
  * Singleton Class
  * @type {*}
@@ -11,6 +11,7 @@ var Backbone = require('backbone')
     , Base = require('./Base')
     , assert = require('assert')
     , async = require('async');
+const DNS = require("dns");
 
 var Garam = {};
 var applicationDir = 'application';
@@ -29,17 +30,8 @@ require.searchCache = function (moduleName, callback) {
     // the cache
     if (mod && ((mod = require.cache[mod]) !== undefined)) {
         // Recursively go over the results
-        (function run(mod) {
-            // Go over each of the module's children and
-            // run over it
-            mod.children.forEach(function (child) {
-                run(child);
-            });
-
-            // Call the specified callback providing the
-            // found module
-            callback(mod);
-        })(mod);
+        delete require.cache[mod];
+        callback(mod);
     }
 };
 
@@ -125,6 +117,9 @@ exports = module.exports =  {
     getCpuData : function () {
         return this.getInstance()._system.getLastLoadData();
     },
+    getWorkerTotal : function () {
+      return this.getInstance()._worker_total;
+    },
 
     /**
      * 마스터에서 워커에게 port 오픈 요청을 받았을때 처리
@@ -157,6 +152,7 @@ exports = module.exports =  {
         return this.getInstance().getController(controllerName);
     },
     addCommand: function(cmd,func) {
+
         this.getInstance().command.addCommand(cmd,func);
     },
     getTransport : function() {
@@ -237,7 +233,7 @@ Garam.Server = function() {
     var v8 = require('v8');
     v8.setFlagsFromString('--expose_gc');
 
-
+    this._worker_total = 0;
     this.config = new Garam.config(new Backbone.Model());
 
     this.logger =   new Garam.Logger;
@@ -246,8 +242,8 @@ Garam.Server = function() {
     this.command = new Garam.Command;
     this.error = new Garam.Error;
     this.cluster = new Garam.Cluster;
-    this._master = new Garam.MasterServer;
-    this._worker = new Garam.ChildServer;
+    this._master = new Garam.Master;
+    this._worker = new Garam.Worker;
     this.bufferMng = new Garam.BufferManager;
 
 
@@ -281,7 +277,7 @@ Garam.Server.prototype.__defineGetter__('log', function () {
  */
 
 _.extend(Garam.Server.prototype, Base.prototype, {
-    create: function(options){
+    create:async function(options){
         var self = this;
 
 
@@ -289,17 +285,17 @@ _.extend(Garam.Server.prototype, Base.prototype, {
         this._transactionList ={};
         this._workers = {};
 
-        /**
-         * 환경 파일을 (conf) 가 모두 읽었으면 발생
-         */
-        this.on('onloadConfig',function(){
-            self.logger.init();
-            self.execute(self.get('service'));
-        });
+       // console.log(options.config)
+
         /**
          * server/conf/,환경 설정을 읽는다.
          */
-        this.config.loadJson(options.config,applicationDir,this);
+
+        await this.config.loadJson(options.config,applicationDir,this);
+
+
+        this.logger.init();
+        await this.execute(self.get('service'));
 
 
     } ,
@@ -334,10 +330,14 @@ _.extend(Garam.Server.prototype, Base.prototype, {
         }
 
 
-        var startPort = this.get('portInfo').defaultPort,
+        let startPort = this.get('portInfo').defaultPort,
             portType =this.get('portInfo').portType,
-            mode =this.get('portInfo').mode,
-            self= this;
+            mode =this.get('portInfo').mode,tcpPort=0;
+
+        if (typeof this.get('portInfo').tcpPort !== 'undefined') {
+            tcpPort = this.get('portInfo').tcpPort;
+        }
+
         if (this.get('clusterMode')) {
 
             var controllers = this.ApplicationFactory.getControllers();
@@ -372,26 +372,36 @@ _.extend(Garam.Server.prototype, Base.prototype, {
              * @private
              */
             function __startCluster(startPort,config) {
-                var port = startPort;
+                let port = startPort,tcpUse=false;
+                if (tcpPort !==0) {
+                    tcpUse = true;
+                }
 
                 if (mode === 'cpu') {
                     var cpus = require('os').cpus().length;
-                    for (var i = 0; i < cpus; i++) {
-                        this.createWorker(port,config);
+                    for (let i = 0; i < cpus; i++) {
+                        this.createWorker(port,config,tcpPort);
                         if (portType === 1) {
                             port++;
                         }
+
+                        if (tcpUse) {
+                            tcpPort++;
+                        }
                     }
                 } else if (mode ==='one') {
-                    this.createWorker(startPort,config);
+                    this.createWorker(startPort,config,tcpPort);
                 } else if ( mode =='number') {
 
                     var maxCount = this.get('portInfo').maxCount;
 
-                    for (var i = 0; i < maxCount; i++) {
-                        this.createWorker(port,config);
+                    for (let i = 0; i < maxCount; i++) {
+                        this.createWorker(port,config,tcpPort);
                         if (portType === 1) {
                             port++;
+                        }
+                        if (tcpUse) {
+                            tcpPort++;
                         }
                     }
                 }
@@ -400,9 +410,10 @@ _.extend(Garam.Server.prototype, Base.prototype, {
 
         }else {
 
-            var controllers = this.ApplicationFactory.getControllers();
-            var config = {},self=this;
-            var total = 0,end=0;
+            console.info('clusterMode false')
+            let controllers = this.ApplicationFactory.getControllers();
+            let config = {},self=this;
+            let total = 0,end=0;
             for (var i in controllers) {
                 if (_.isFunction(controllers[i].getWorkerConfigure)) {
                     total++;
@@ -430,19 +441,18 @@ _.extend(Garam.Server.prototype, Base.prototype, {
      * worker 를 생성한다.
      * @param port
      */
-    createWorker : function(port,cfg) {
-        var config = {};
-        //  var worker = this.cluster.fork(),config={};
-        //  this._workers[worker.id] =worker;
-        // this._workers[worker.id].port = port;
+    createWorker : function(port,cfg,tcpPort) {
+        let config = {};
 
         if(!cfg) {
             cfg = {};
         }
         _.extend(config,cfg);
         config.port = port;
+        config.tcpPort =cfg.tcpPort > 0 ? cfg.tcpPort : tcpPort;
 
         this.logger.warn('create worker',port);
+        this._worker_total++;
         // this._master.setWorkerEvent(worker.id,config);
         return  this._master.createWorker(config);
 
@@ -573,14 +583,43 @@ _.extend(Garam.Server.prototype, Base.prototype, {
             options.port = this.get('port');
 
             this._service =  new Garam.ServiceManager();
-            this._service .create(options);
+            this._service.create(options);
 
             if (this.cluster.isWorker() ) {
 
-                this._service.listen(function(server,port){
+                this._service.listen( function(server,port){
                     self.emit('listenService',options.port );
+
                     if (this.get('service').transport) {
-                        this.transport.createWebSocket(server,function(){
+                        if (this.get('service').transportType ==='socket.io') {
+
+                            this.transport.createSocketIo(server,async function(){
+                                //클러스터가 마스터에게 알림 메세지.
+                                workerPortOpenSuccessReq = self.getWorker().getTransaction('workerPortOpenSuccessReq');
+                                packet = workerPortOpenSuccessReq.addPacket({'status':1});
+                                self.getWorker().send(packet);
+                                if (typeof self.get('portInfo').tcpPort !== 'undefined') {
+                                    await self.transport.addTcpSocket(server);
+                                }
+
+                            });
+                        } else if(this.get('service').transportType ==='webSocket') {
+
+                            this.transport.createWebSocket(server,async function(){
+                                //클러스터가 마스터에게 알림 메세지.
+                                workerPortOpenSuccessReq = self.getWorker().getTransaction('workerPortOpenSuccessReq');
+                                packet = workerPortOpenSuccessReq.addPacket({'status':1});
+                                self.getWorker().send(packet);
+
+
+                                if (typeof self.get('portInfo').tcpPort !== 'undefined') {
+                                    await self.transport.addTcpSocket(server);
+                                }
+
+                            });
+                        }
+                    } else if(this.get('service').transportType ==='tcp') {
+                        this.transport.createTcpSocket(server,function(){
                             //클러스터가 마스터에게 알림 메세지.
                             workerPortOpenSuccessReq = self.getWorker().getTransaction('workerPortOpenSuccessReq');
                             packet = workerPortOpenSuccessReq.addPacket({'status':1});
@@ -615,9 +654,9 @@ _.extend(Garam.Server.prototype, Base.prototype, {
 
     restartWorker : function(config,workerInstacne) {
 
-        this.logger.info('restart worker '+config.port);
+        this.logger.info('restart worker ',config);
         this.createWorker(config.port,config);
-        delete workerInstacne;
+      //  delete workerInstacne;
     },
     _master : null,
     _workers : null,
@@ -646,51 +685,64 @@ _.extend(Garam.Server.prototype, Base.prototype, {
      * 서버의 최초 기동.
      * @param service
      */
-    execute : function(service) {
+    execute : async function(service) {
 
-        var clusterMode = this.get('clusterMode'),self=this
-            , SingleChild = require('./cluster/SingleChild')
+        let clusterMode = this.get('clusterMode'),self=this
+            , SingleChild = require('./cluster/SingleWorker')
             , DNS =require('dns')
             , SingleMaster = require('./cluster/SingleMaster');
         this.set('application',true);
         this.set('appDir',applicationDir);
         this.setIp();
 
-        DNS.lookup(require('os').hostname(), function (err, ip, fam) {
+        // DNS.lookup(require('os').hostname(), (err, ip, fam)=>{
+        //
+        // });
 
-            self.set('serverIP',ip);
-            self.logger.info('server IP ',self.get('serverIP'));
+        DNS.lookup(require('os').hostname(), async (err, ip, fam)=>{
+
+            this.set('serverIP',ip);
+            this.logger.info('server IP ',self.get('serverIP'));
             if (clusterMode) {
-                self.logger.info('use clusterMode');
-                if (self.cluster.isMaster()) {
-                    if(self.get('masterDB')) {
+                this.logger.info('use clusterMode');
+                if (this.cluster.isMaster()) {
+                    if(this.get('masterDB')) {
+                        await this._master.create();
+                        await this.executeDb();
+                        // this._master.create(function(){
+                        //     self.executeDb();
+                        // });
 
-                        self._master.create(function(){
-                            self.executeDb();
-                        });
                     } else {
-                        self._master.create(function(){
-                            self.executeApp();
-                        });
+
+                        await this._master.create();
+                        await this.executeApp();
+                        // this._master.create(function(){
+                        //     self.executeApp();
+                        // });
 
                     }
 
                 } else if(self.cluster.isWorker()) {
-                    self._worker.create(function(){
-                        self.executeDb();
-                    });
+                    await this._worker.create();
+                    await this.executeDb();
+                    // this._worker.create(function(){
+                    //     self.executeDb();
+                    // });
                 }
             } else {
                 delete this._master;
                 delete this._worker;
-                self._worker =self._singleWorker;
-                self._master = self._singleMaster;
-                self._master.create(function(){
-                    self.executeDb();
-                    //self._worker.create(function(){
-                    //    self.executeDb();
-                    //});
-                });
+
+                this._worker =this._singleWorker;
+                this._master = this._singleMaster;
+
+                await this._master.create();
+                await this.executeDb();
+                // this._master.create(function(){
+                //     self.executeDb();
+                //
+                // });
             }
 
 
@@ -755,6 +807,7 @@ _.extend(Garam.Server.prototype, Base.prototype, {
      */
     createSingleWorker : function(callback) {
         var self = this;
+        console.log(this._worker)
         this._worker.create(function(){
             callback();
         });
@@ -772,61 +825,84 @@ _.extend(Garam.Server.prototype, Base.prototype, {
      * 각각의 특정 디렉토리의 js 파일들을 모두 읽어 들여 초기화가 모두 완료 되면.
      * databaseOnReady 이벤트가 발생하여 다음 동작을 진행 하게 된다.
      */
-    executeDb : function() {
+    executeDb : async function() {
 
+        let self = this;
         this.dbWorkState = {};
         if (this.get('useDB')) {
-            var db_config = this.get('db'),self=this;
+            let db_config = this.get('db'),self=this;
+
             if (_.isArray(this.get('db'))) {
                 for (var i in db_config) {
                     this.dbWorkState[db_config[i].namespace] = false;
                 }
-                db_create.call(this,db_config);
+                await db_create.call(this,db_config);
             }
 
-            function db_create(config) {
+           async function db_create(config) {
                 require.uncache('nohm');
-                var cfg = config.pop();
-                var db  =self.db[cfg.namespace] = new Garam.Db();
+                let cfg = config.pop();
+                let db  = this.db[cfg.namespace] = new Garam.Db();
                 db.connectTimeout =setTimeout(function () {
                     self.logger.error('Database Connection Timeout' ,cfg.namespace );
                 },3000);
-                db.createConnect(cfg,function(){
+
+                try {
+                    await db.createConnect(cfg);
 
                     clearTimeout(db.connectTimeout);
-                    db.initModel();
-                    if (db_config.length > 0) {
-                        db_create.call(self,db_config);
-                    }
+                    await db.initModel();
 
-                });
+
+                    if (db_config.length > 0) {
+
+                       await db_create.call(self,db_config);
+                    } else {
+                        await self.executeApp();
+                    }
+                } catch (e) {
+                    console.error('데이터 베이스 접속중에러 발생',e)
+                }
+
+
+                //
+                // db.createConnect(cfg,function() {
+                //
+                //     clearTimeout(db.connectTimeout);
+                //     db.initModel();
+                //     if (db_config.length > 0) {
+                //         db_create.call(self,db_config);
+                //     }
+                //
+                // });
             }
         } else {
 
-            this.executeApp();
+            await this.executeApp();
         }
         /**
          * 데이터 베이스 모델, 프로시져가 모두 준비가 완료 상태에 오면 다음 작업을 준비 시킨다.
          *
          */
-        this.on('databaseOnReady',function(namespace) {
-            var state = true;
-            if (this.isDataBaseReady(namespace)) {
-                return;
-            }
-            self.dbWorkState[namespace] = true;
-
-            for (var i in self.dbWorkState) {
-                if (self.dbWorkState[i] === false) {
-                    state = false;
-                }
-            }
-            if (state) {
-                self.executeApp();
-            }
-
-
-        });
+        // this.on('databaseOnReady',function(namespace) {
+        //     var state = true;
+        //     console.log('on message !!!',namespace)
+        //     if (this.isDataBaseReady(namespace)) {
+        //         return;
+        //     }
+        //     self.dbWorkState[namespace] = true;
+        //
+        //     for (var i in self.dbWorkState) {
+        //         if (self.dbWorkState[i] === false) {
+        //             state = false;
+        //         }
+        //     }
+        //     if (state) {
+        //         self.executeApp();
+        //     }
+        //
+        //
+        // });
     },
     isDataBaseReady :  function(namespace) {
         return this.dbWorkState[namespace];
@@ -838,11 +914,17 @@ _.extend(Garam.Server.prototype, Base.prototype, {
      * application 이 모두 준비 되면 net 처리를 하게 된다ㅣ.
      *
      */
-    executeApp : function() {
+    executeApp : async function() {
         var self = this,single = this.get('clusterMode');
         this.executeNet(); // tcp net 모듈 활성화
-        this.ApplicationFactory = new Garam.ApplicationFactory();
-        this.ApplicationFactory.create();
+
+        try {
+            this.ApplicationFactory = new Garam.ApplicationFactory();
+            await this.ApplicationFactory.appCreate();
+        } catch (e) {
+            this.logger.error('ApplicationFactory Error',e)
+        }
+
 
         if (this.get('testMode')) {
             var dir = process.cwd()+'/'+ this.get('appDir') + '/test';
@@ -879,6 +961,7 @@ _.extend(Garam.Server.prototype, Base.prototype, {
 
 
         this.on('applicationReady',function(){
+            console.log('call')
             createNet.call(self);
         });
 //        this.emit('completeWork','end');
@@ -892,24 +975,32 @@ _.extend(Garam.Server.prototype, Base.prototype, {
                     if (this.get('net').host) {
                         for (var i in this.get('net').host) {
 
-                            (function(hostConfig){
-
-                                this.transport.createHost(hostConfig,function(client){
-
-                                });
-                            }).call(self,this.get('net').host[i]);
+                            (async (hostConfig)=>{
+                                await this.transport.createHost(hostConfig);
+                            })(self,this.get('net').host[i]);
+                            // (function(hostConfig){
+                            //
+                            //     this.transport.createHost(hostConfig,function(client){
+                            //
+                            //     });
+                            // }).call(self,this.get('net').host[i]);
                         }
 
                     }
                     if (this.get('net').remote) {
 
                         for (var i in this.get('net').remote) {
-                            (function(remoteConfig){
 
-                                this.transport.createRemote(remoteConfig,function(client){
 
-                                });
-                            }).call(self,this.get('net').remote[i]);
+                            (async (remoteConfig)=>{
+                                await this.transport.createRemote(remoteConfig);
+                            })(this.get('net').remote[i]);
+                            // (function(remoteConfig){
+                            //
+                            //     this.transport.createRemote(remoteConfig,function(client){
+                            //
+                            //     });
+                            // }).call(self,this.get('net').remote[i]);
                         }
 
                     }
@@ -923,13 +1014,18 @@ _.extend(Garam.Server.prototype, Base.prototype, {
                     this.startService();
                 }
             } else {
+
                 self.setWorkerReady();
+                // if (this.get('net').hostWorker) {
+                //    console.log(this.get('net').hostWorker)
+                // }
 
             }
         }
     },
     setWorkerReady : function() {
         var workerOnReady = this.getWorker().getTransaction('workerOnReady').addPacket();
+
         this.getWorker().send(workerOnReady);
     },
     getDB : function(namespace) {
@@ -960,8 +1056,8 @@ Garam.System = require('./System');
 Garam.BufferManager = require('./BufferManager');
 
 
-Garam.ChildServer = require('./cluster/WorkerProcess');
-Garam.MasterServer = require('./cluster/MasterProcess');
+Garam.Worker = require('./cluster/Worker');
+Garam.Master = require('./cluster/Master');
 //
-Garam.SingleChildServer = require('./cluster/SingleChild');
+Garam.SingleChildServer = require('./cluster/SingleWorker');
 Garam.SingleMasterServer = require('./cluster/SingleMaster');

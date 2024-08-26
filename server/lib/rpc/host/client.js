@@ -16,7 +16,7 @@ function Client (options) {
 
     this.disconnected = false;
     this.open = false;
-};
+}
 
 _.extend(Client.prototype, JsonParse.prototype, {
     init : function(socket) {
@@ -30,7 +30,6 @@ _.extend(Client.prototype, JsonParse.prototype, {
 
         self.removeAllListeners('message');
         self.on('message',function(data){
-
             self.onMessage(data);
         });
         this.socket.on('close',function(){

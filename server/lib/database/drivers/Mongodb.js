@@ -10,7 +10,7 @@ exports = module.exports = Mongodb;
 function Mongodb () {
 
 //27018
-};
+}
 
 //mongod.exe D:\work\monogoData
 module.exports  = DB_driver.extend({

@@ -62,8 +62,8 @@ var App = Application.extend({
 
         });
     },
-    setConnectionStatus : function (state) {
-        this.state = state;
+    setConnectionStatus : function (reconnect) {
+
         var aliasDomain = Garam.get('aliasDomain'),self=this;
         if(typeof aliasDomain !== 'undefined') {
             //self.send(self.getTransaction('aliasUrlInfo').addPacket({aliasDomain:aliasDomain}));

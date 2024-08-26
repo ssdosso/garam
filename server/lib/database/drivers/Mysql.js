@@ -6,125 +6,110 @@ var _ = require('underscore')
     , format = require('util').format
     , assert= require('assert');
 
-
+const ConnectionLimit = 10;
 
 //1
+
 module.exports  = DB_driver.extend({
     conn :null,
     close : function() {
-        var conn = this.conn.isConn();
+        let conn = this.conn.isConn();
         if (conn) {
             this.conn.close();
         }
     },
-    connection : function(callback) {
-        var self = this;
 
+    connectionAsync :async  function () {
+        let self = this,conn,config;
+        return new Promise((resolved,rejected)=>{
+            resolved(0);
+        });
+    },
+    connection : function(callback) {
+
+        let self = this,conn,write_conn,read_conn,replica=false,debug=false;
 
         return  (function() {
-
-
-            // self.conn = Mysql.createPool({
-            //     host     : this.get('hostname'),
-            //     user     : this.get('username'),
-            //     password : this.get('password'),
-            //     database : this.get('database')
-            // });
-            //
-            // self.conn.on('end', function(err) {
-            //     console.log('mysql close');
-            // });
-
             this.conn = (function() {
 
-                var conn = null,cluster=false,clusterInfo;
-
-
-                function _clusterConnection(clusterDB,callback) {
-                    var clusterConn;
-                    clusterConn =   Mysql.createPool({
-                        connectionLimit : self.get('connectionLimit') ? self.get('connectionLimit') : 10,
-                        host     : clusterDB.hostname,
-                        port     : clusterDB.port ? clusterDB.port : self.get('port'),
-                        user     : clusterDB.username ? clusterDB.username  :self.get('username'),
-                        password : clusterDB.password ? clusterDB.password : self.get('password'),
-                        database : clusterDB.database ? clusterDB.database : self.get('database'),
-                        supportBigNumbers :true
-                        // bigNumberStrings : true
-                    });
-                    clusterConn.getConnection(function(err, connection) {
-                        if (err) {
-                            return Garam.logger().error('Mysql clusterConn  Error : ',err);
-                        }
-
-                        callback(clusterConn)
-                    });
-                }
-
+                 conn = null;
+                 let cluster=false,clusterInfo,connectList=[];
+                debug =self.get('debug')
                 function _connection() {
-
                     if (!conn) {
 
-                        if (typeof self.get('cluster') !=='undefined' &&   self.get('cluster')  === true) {
-                            conn = {};
-                            cluster = true;
-                            clusterInfo = self.get('clusterInfo');
+                        if (self.get('replica')) {
+                            replica = true;
+                            let wOptions = self.get('replica').write;
+                            let rOptions = self.get('replica').read;
 
-                            conn['writer'] =   Mysql.createPool({
-                                connectionLimit : self.get('connectionLimit') ? self.get('connectionLimit') : 10,
-                                host     : self.get('hostname'),
-                                port     : self.get('port'),
-                                user     : self.get('username'),
-                                password : self.get('password'),
-                                database : self.get('database'),
-                                supportBigNumbers :true
-                                // bigNumberStrings : true
-                            });
-                            conn['writer'].getConnection(function(err, connection) {
-                                // connected! (unless `err` is set)
-                                if (err) {
-                                    Garam.logger().error('Mysql Connect Error : ',err);
-                                }
+                            conn =  true;
 
-                                if (typeof clusterInfo === 'undefined') {
-                                    assert(0);
-                                    return;
-                                }
-                                if (clusterInfo.length ===0) {
-                                    assert(0);
-                                    return;
-                                }
-                                var clusterJob = 0;
-                                conn['cluster_list']= [];
+                              (function (){
+                                write_conn =  Mysql.createPool({
+                                    connectionLimit : wOptions.poolLimit,
+                                    host     : wOptions.hostname,
+                                    port     : wOptions.port,
+                                    user     : wOptions.username,
+                                    password : wOptions.password,
+                                    database : wOptions.database,
+                                    supportBigNumbers :true
+                                    // bigNumberStrings : true
+                                });
 
-                                for (var i in clusterInfo) {
-                                    (function (clusterDB) {
+                                  write_conn.getConnection(function(err, connection) {
+                                      // connected! (unless `err` is set)
+                                      if (err) {
+                                          Garam.logger().error('Mysql Connect Error : ',err);
+                                      }
+                                      Garam.logger().info('mysql write conn',wOptions.hostname,'replica',replica);
 
-                                        _clusterConnection(clusterDB,function (clusterConn) {
-                                            conn['cluster_list'].push(clusterConn);
-                                            clusterJob++;
-
-                                            if (clusterJob == clusterInfo.length) {
-                                                if (typeof callback !== 'undefined') {
-
-                                                    callback(err, connection);
-                                                }
-                                            }
-                                        });
-
-                                    })(clusterInfo[i]);
-                                }
+                                      connectList.push(1);
+                                      _next(err,'write',connection);
+                                  });
+                            })();
 
 
+                            (function (){
+                                read_conn =  Mysql.createPool({
+                                    connectionLimit :  rOptions.poolLimit,
+                                    host     : rOptions.hostname,
+                                    port     : rOptions.port,
+                                    user     : rOptions.username,
+                                    password : rOptions.password,
+                                    database : rOptions.database,
+                                    supportBigNumbers :true
+                                    // bigNumberStrings : true
+                                });
 
 
-                            });
+                                read_conn.getConnection(function(err, connection) {
+                                    // connected! (unless `err` is set)
+                                    if (err) {
+                                        Garam.logger().error('Mysql Connect Error : ',err);
+                                    }
+                                    Garam.logger().info('mysql read conn',rOptions.hostname,'replica',replica);
+
+                                    connectList.push(1);
+                                    _next(err,'read',connection);
+                                });
+                            })();
+
+
+
+                            function _next(err,type,connection) {
+
+                                    if (connectList.length ===2) {
+                                        callback(err);
+                                    }
+
+                            }
+
                         } else {
-
-                            var connectList =  self.get('connectionLimit') ? self.get('connectionLimit') : 10;
-
                             conn =   Mysql.createPool({
-                                connectionLimit : self.get('connectionLimit') ? self.get('connectionLimit') : 10,
+                                connectionLimit : ConnectionLimit,
+                                queueLimit:0,
+                                waitForConnections:true,
                                 host     : self.get('hostname'),
                                 port      : self.get('port'),
                                 user     : self.get('username'),
@@ -139,27 +124,24 @@ module.exports  = DB_driver.extend({
                                     Garam.logger().error('Mysql Connect Error : ',err);
                                 }
 
-
                                 if (typeof callback !== 'undefined') {
                                     callback(err, connection);
                                 }
-
-
                             });
                         }
 
 
-                    } 
+                    }
                 }
 
                 _connection.call(this);
 
-         
-                return {
-                    getDataType : function() {
-                        return   _dataType;
-                    },
 
+                return {
+
+                    isDebug : function () {
+                        return debug;
+                    },
                     isConn : function() {
                         return conn ? true : false;
                     },
@@ -169,103 +151,73 @@ module.exports  = DB_driver.extend({
                         conn = null;
                     },
                     getConnection : function(callback,mode) {
-                        if (!conn) {
-                            _connection(function(){
-                                callback(false,conn);
-                            });
-                        } else {
-                            if (!cluster) {
-                                conn.getConnection(function(err, connection) {
-                                    // connected! (unless `err` is set)
-                                    if (err) {
-                                        Garam.logger().error('Mysql Connect Error : ',err);
-                                    }
-
-                                    callback(err, connection);
+                        if (!replica) {
+                            if (!conn) {
+                                _connection(function(){
+                                    callback(false,conn);
                                 });
                             } else {
-                                //클러스터 모드 일 경우
 
-                                // 쓰기 db
-                                if (mode ==2) {
-
-                                    conn['writer'].getConnection(function(err, connection) {
-                                        // connected! (unless `err` is set)
-
-                                        if (err) {
-                                            Garam.logger().error('Mysql Connect Error : ',err);
-                                        }
-
-                                        callback(err, connection);
-                                    });
-                                } else if (mode == 1) {
-
-                                   var key= Math.floor( (Math.random() * ( conn['cluster_list'].length - 1 + 1)));
-
-                                    conn['cluster_list'][key].getConnection(function(err, connection) {
-                                        // connected! (unless `err` is set)
-
-                                        if (err) {
-                                            Garam.logger().error('Mysql Connect Error : ',err);
-                                        }
-
+                                conn.getConnection(function(err, connection) {
+                                    callback(err, connection);
+                                });
+                            }
+                        } else {
+                            if (!conn) {
+                                _connection(function(){
+                                    if (mode ===1 || mode ===false) {
+                                        read_conn.getConnection(function(err, connection) {
+                                            callback(err, connection);
+                                        });
+                                    } else {
+                                        write_conn.getConnection(function(err, connection) {
+                                            callback(err, connection);
+                                        });
+                                    }
+                                });
+                            } else {
+                                if (mode ===1 || mode ===false) {
+                                    read_conn.getConnection(function(err, connection) {
                                         callback(err, connection);
                                     });
                                 } else {
-                                    assert(0);
+                                    write_conn.getConnection(function(err, connection) {
+                                        callback(err, connection);
+                                    });
                                 }
 
                             }
+                        }
 
+
+                    },
+                    getWriteConnection : function(callback,mode) {
+                        if (!conn) {
+                            _connection(function(){
+                                write_conn.getConnection(function(err, connection) {
+                                    callback(err, connection);
+                                });
+                            });
+                        } else {
+                            if (!replica) {
+                                conn.getConnection(function(err, connection) {
+                                    callback(err, connection);
+                                });
+                            } else {
+                                //pool
+
+                                write_conn.getConnection(function(err, connection) {
+                                    callback(err, connection);
+                                });
+                            }
 
                         }
 
-                        
-                      
                     }
                 }
             })();
 
         }).call(this);
-
-
-    },
-    query : function(queryString, callback) {
-        assert(queryString);
-        var Queries;
-        if (callback === undefined) {
-            assert(0);
-        }
-        if(_.isArray(callback)) {
-            Queries = callback;
-            callback = arguments[2];
-            this.conn.getConnection(function(err,connection) {
-                if(err)  {
-                    Garam.getInstance().log.warn(err);
-                }
-                connection.query(queryString, Queries, function(err, rows) {
-                    callback(err,rows);
-                    if (typeof connection.release === 'function' ) {
-                        connection.release();
-                    }
-                });
-            });
-        } else {
-            this.conn.getConnection(function(err,connection) {
-                if(err)  {
-                    Garam.getInstance().log.warn(err);
-                }
-
-                connection.query( queryString, function(err, rows) {
-                    callback(err,rows);
-                    if (typeof connection.release === 'function' ) {
-                        connection.release();
-                    }
-
-                });
-            });
-        }
-
 
 
     }

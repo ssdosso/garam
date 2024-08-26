@@ -91,33 +91,46 @@ _.extend(Application.prototype, Base.prototype, {
 
         return crypted;
     },
-    _create : function(className,callback) {
+    _create : async function(className,callback) {
 
-        var self = this;
+
         this.className = className;
+         await  this.addTransactionDirectory(this.className);
+        if(_.isFunction(this.createConnection)) {
+            this.createConnection();
+        }
 
-        this.addTransactionDirectory(this.className,function(){
 
-            if(_.isFunction(self.createConnection)) {
-
-                self.createConnection();
-                callback();
-            } else {
-                callback();
-            }
-
-        });
+        // this.addTransactionDirectory(this.className,function(){
+        //
+        //     if(_.isFunction(self.createConnection)) {
+        //
+        //         self.createConnection();
+        //         callback();
+        //     } else {
+        //         callback();
+        //     }
+        //
+        // });
     },
+    removeUserTransactions : function (user) {
+        let transaction = this._transactions;
+        for (let name in transaction) {
+            ((trans)=>{
+                trans.removeEvent(user);
 
+            })( transaction[name]);
+        }
+    },
     /**
      *
      * @param user socket.io OR Net
 
      */
-    addClientTransactions : function(user) {
-        var transaction_controllers = Garam.getInstance().getTransactions();
-        var d = domain.create();
-        var args = Array.prototype.slice.call(arguments);
+     addClientTransactions : function(user) {
+        let transaction_controllers = Garam.getInstance().getTransactions();
+        let d = domain.create();
+        let args = Array.prototype.slice.call(arguments);
         d.on('error', function(err) {
 
             Garam.logger().error(err.stack);
@@ -167,7 +180,7 @@ _.extend(Application.prototype, Base.prototype, {
         transaction._packet.pid = transaction.pid;
         transaction._parentController(this);
         transaction.create();
-
+        return transaction.pid;
         //  Garam.getInstance().setTransactionsList(transaction.pid,transaction);
     },
     /**
@@ -175,123 +188,157 @@ _.extend(Application.prototype, Base.prototype, {
      * @param dir  각 controller 의 namespace, transaction 디렉토리명.
      * @param user   socket  instance , default is null
      */
-    addTransactionDirectory : function(dir,callback) {
-        var transDir =  Garam.getInstance().get('appDir') +'/transactions/'+dir,self = this;
-        if(!fs.existsSync(transDir)) {
-            Garam.getInstance().log.warn('controller 에서 사용하는 트랜잭션 폴더가 존재하지 않습니다 transactions/'+dir);
-            fs.mkdirSync(transDir);
-            //  Garam.getInstance().log.error('not found Transaction Directory' +transDir);
-            callback();
-            return;
-        }
+    addTransactionDirectory :  function(dir,callback) {
+        let transDir =  Garam.getInstance().get('appDir') +'/transactions/'+dir,self = this;
         this._transactions = {};
-
-        Garam.getInstance().setTransactions(this._transactions,this.className);
-        var list = fs.readdirSync(transDir);
-        var total = list.length;
-        if (list.length > 0) {
-            list.forEach(function (file,i) {
-                (function(job) {
-                    var stats = fs.statSync(transDir + '/'+ file);
-                    if (stats.isFile()) {
-                        var Transaction = require(process.cwd()+'/'+transDir + '/'+ file);
-                        self.addTransaction(new Transaction);
-
-                        if (total === (job+1)) {
-                            callback();
-                        }
-                    } else {
-                        readFolder(file,function () {
-                            if (total === (job+1)) {
-                                callback();
-                            }
-                        });
-                    }
-
-                })(i);
-
-            });
-        } else {
-            callback();
-        }
+        return new Promise(async (resolve, reject) => {
 
 
-        function readFolder(folderName,callback) {
-            var subDir =  Garam.getInstance().get('appDir') +'/transactions/'+dir+'/'+folderName;
-            var list = fs.readdirSync(subDir);
-            var total = list.length,Transaction;
-            if (list.length > 0) {
-                list.forEach(function (file,i) {
-                    (function(job) {
-                        var stats = fs.statSync(subDir + '/'+ file);
+            try {
+                if(!fs.existsSync(transDir)) {
+                    Garam.getInstance().log.warn('controller 에서 사용하는 트랜잭션 폴더가 존재하지 않습니다 transactions/'+dir);
+                    fs.mkdirSync(transDir);
+                    //  Garam.getInstance().log.error('not found Transaction Directory' +transDir);
+                    resolve();
+                    return;
+                }
+
+                Garam.getInstance().setTransactions(this._transactions,this.className);
+                let list = fs.readdirSync(transDir);
+                for await (let file of list) {
+                    await (async (transFile)=>{
+                        let stats = fs.statSync(transDir + '/'+ transFile);
                         if (stats.isFile()) {
-                            Transaction = require(process.cwd()+'/'+subDir + '/'+ file);
-                            self.addTransaction(new Transaction);
+                            let Transaction = require(process.cwd()+'/'+transDir + '/'+ transFile);
+                            let pid  =this.addTransaction(new Transaction);
 
                         } else {
-                            assert(0);
-                        }
-                        if (total === (job+1)) {
 
-                            callback();
+                            await readTransaction.call(this,transFile);
 
                         }
-                    })(i);
+                    })(file);
+                }
 
-                });
-            } else {
-                callback();
+                resolve();
+            } catch (e) {
+                reject('addTransactionDirectory'+e);
             }
+
+        })
+
+
+
+
+        // var list = fs.readdirSync(transDir);
+        // var total = list.length;
+        // if (list.length > 0) {
+        //     list.forEach(function (file,i) {
+        //         (function(job) {
+        //             var stats = fs.statSync(transDir + '/'+ file);
+        //             if (stats.isFile()) {
+        //                 var Transaction = require(process.cwd()+'/'+transDir + '/'+ file);
+        //                 self.addTransaction(new Transaction);
+        //
+        //                 if (total === (job+1)) {
+        //                     callback();
+        //                 }
+        //             } else {
+        //                 readFolder(file,function () {
+        //                     if (total === (job+1)) {
+        //                         callback();
+        //                     }
+        //                 });
+        //             }
+        //
+        //         })(i);
+        //
+        //     });
+        // } else {
+        //     callback();
+        // }
+
+
+        async function readTransaction(folderName,callback) {
+
+            return new Promise(async (resolve, reject) => {
+                let subDir =  Garam.getInstance().get('appDir') +'/transactions/'+dir+'/'+folderName;
+                let list = fs.readdirSync(subDir);
+                let total = list.length,Transaction;
+
+                    for await (let file of list) {
+                        await (async (transFile)=>{
+                            let stats = fs.statSync(subDir + '/'+ file);
+                            if (stats.isFile()) {
+                                Transaction = require(process.cwd()+'/'+subDir + '/'+ file);
+                                let pid  = this.addTransaction(new Transaction);
+
+                            } else {
+                                reject('더이상 하위 폴더에서 프탠잭션 파일을 사용할 수 없습니다.')
+                            }
+                        })(file);
+                    }
+                resolve();
+
+
+                // if (list.length > 0) {
+                //     list.forEach(function (file,i) {
+                //         (function(job) {
+                //             var stats = fs.statSync(subDir + '/'+ file);
+                //             if (stats.isFile()) {
+                //                 Transaction = require(process.cwd()+'/'+subDir + '/'+ file);
+                //                 self.addTransaction(new Transaction);
+                //
+                //             } else {
+                //                 assert(0);
+                //             }
+                //             if (total === (job+1)) {
+                //
+                //                 callback();
+                //
+                //             }
+                //         })(i);
+                //
+                //     });
+                // } else {
+                //     callback();
+                // }
+            });
+
         }
 
     },
-    request: function(method,url,data,headers,dataType,next) {
-
-        assert(next);
+    request: async function(method,url,data,headers,dataType) {
         if (!_.isObject(data)) {
             assert(0);
         }
-
-
-
-        var scope = this
-            ,http =this.get('ssl') ? 'https' : 'http'
-        // ,url=  http+this.get('authServer')+'/' + path
-            ,qs = require('querystring').stringify(data)
-            ,options={};
-        if (url.indexOf(http) !== -1) {
-            assert(0,'url  에서 http 값을 제외 해 주세요');
-            return;
+        if (typeof headers === 'undefined') {
+            headers ={'content-type':'application/json'};
         }
-
-
+        if (typeof dataType === 'undefined') {
+            dataType ='json';
+        }
+        let scope = this,qs = require('querystring').stringify(data),options={};
         method = method === undefined ? 'get' : method;
         switch(method) {
             case 'get':
                 options.headers = {
                     'content-type' : 'application/x-www-form-urlencoded',
                     'Cache-Control':'no-cache'
-
                 };
-                options.url = http+'://'+url + '?' + qs;
+                options.url = url + '?' + qs;
                 options.gzip = true;
                 break;
             default :
                 options.headers = {'content-type' : 'application/x-www-form-urlencoded'};
-                options.url = http+'://'+url;
+                options.url = url;
                 options.body = qs;
-
-
 
                 break;
         }
 
-
-        //if (header) {
-        //    options.headers[header.name] = header.value;
-        //}
         if (typeof headers !== 'undefined') {
-            for (var i in headers) {
+            for (let i in headers) {
                 options.headers[i]  = headers[i];
             }
         }
@@ -301,45 +348,43 @@ _.extend(Application.prototype, Base.prototype, {
 
 
 
-        var domain = require('domain');
-        var d = domain.create();
+        return new Promise((resolve, reject) => {
 
-        d.on('error', function(err) {
+            try {
+                request[method](options, function(error, response, body) {
+                    //  console.log(response)
+                    if (error) {
+                     //   Garam.logger().warn('Error Message:'+error);
+                        throw new Error(error);
+                    } else {
+                        switch (dataType) {
+                            case 'json':
+                                try {
+                                    let data = JSON.parse(body);
 
-            Garam.logger().warn('Error Message:'+err.stack);
+                                    resolve(data);
+                                } catch (e) {
+                                    throw new Error(e);
 
-            // Our handler should deal with the error in an appropriate way
-        });
+                                }
 
-        d.run(function() {
-            request[method](options, function(error, response, body){
-                //  console.log(response)
-                if (error) {
-                    Garam.logger().warn('Error Message:'+error);
-                    next(error);
-                } else {
-                    switch (dataType) {
-                        case 'json':
-                            try {
-                                var data = JSON.parse(body);
+                                break;
+                            case 'string':
+                                resolve(body);
+                                break;
+                        }
 
-                                next(false,response, data);
-                            } catch (e) {
-                                next(e,response, body);
-                            }
-
-                            break;
-                        case 'string':
-                            next(false,response, body);
-                            break;
                     }
 
-                }
 
-
-            });
+                });
+            } catch (e) {
+                reject(e);
+            }
 
         });
+
+
 
     }
 

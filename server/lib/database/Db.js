@@ -8,6 +8,7 @@ var EventEmitter = require('events').EventEmitter
     , DB_Store = require('./DB_Store')
     , RedisFactory = require('./model/ModelFactory')
     , MemoryFactory = require('./model/MemoryFactory')
+    , DynamoDbFactory = require('./model/DynamoDbFactory')
     , assert= require('assert');
 
 exports = module.exports = DB;
@@ -18,7 +19,7 @@ function DB (mgr, name) {
 
 
 
-};
+}
 
 
 _.extend(DB.prototype, EventEmitter.prototype, {
@@ -46,25 +47,30 @@ _.extend(DB.prototype, EventEmitter.prototype, {
         return this.db_store.get(dpname);
     },
     getNamespace : function() {
+
         this.db.getNamespace();
     },
 
-    initModel : function() {
+    initModel : async function() {
 
 
         switch (this.config.driver.toLowerCase()) {
             case 'redis':
                 this.modelFactory = new RedisFactory(this.config.namespace,this.config);
                 break;
+            case 'dynamodb':
+                this.modelFactory = new DynamoDbFactory(this.config.namespace,this.config);
+                break;
             case 'mysql':
             case 'mssql':
+
                 this.modelFactory = new ProcedureFactory(this.config.namespace);
                 break;
             case 'memory':
                 this.modelFactory = new MemoryFactory(this.config.namespace,this.config);
                 break;
         }
-        this.modelFactory.create();
+      return  this.modelFactory.create();
 
     },
     /**
@@ -114,39 +120,59 @@ _.extend(DB.prototype, EventEmitter.prototype, {
             }
         }):null;
     },
-
-
-    createConnect : function(config,callback) {
-
+    createConnect : async function(config,callback) {
         this.config = config;
-
         this.db_store = new DB_Store(this.config.namespace);
 
-        db_create.call(this);
-
-        function db_create() {
-            var cfg = this.config;
-
+        return new Promise((resolve, reject) => {
+            let cfg = this.config;
             if(!cfg.driver) {
-                Garam.logger().error(' not find  db driver ');
-                return;
+
+
+                return   reject(' not find  db driver')
             }
             if(!cfg.namespace) {
-                Garam.logger().error(' not find  db namespace');
-                return;
+
+                return   reject('not find  db namespace')
             }
 
-            var Database = require('./drivers/'+cfg.driver);
+
+            let Database = require('./drivers/'+cfg.driver);
             this.db = new Database();
             this.db.create(cfg);
             Garam.getInstance().log.info(' connected DB  ',cfg.driver,cfg.namespace)
             this.db.connection(function(){
 
                 Garam.getInstance().log.info(' connection DB  ',cfg.driver,cfg.namespace)
-                callback();
+                resolve();
             });
-            //this.emit('ready');
-        }
+        });
+
+        // db_create.call(this);
+        //
+        // function db_create() {
+        //     var cfg = this.config;
+        //
+        //     if(!cfg.driver) {
+        //         Garam.logger().error(' not find  db driver ');
+        //         return;
+        //     }
+        //     if(!cfg.namespace) {
+        //         Garam.logger().error(' not find  db namespace');
+        //         return;
+        //     }
+        //
+        //     var Database = require('./drivers/'+cfg.driver);
+        //     this.db = new Database();
+        //     this.db.create(cfg);
+        //     Garam.getInstance().log.info(' connected DB  ',cfg.driver,cfg.namespace)
+        //     this.db.connection(function(){
+        //
+        //         Garam.getInstance().log.info(' connection DB  ',cfg.driver,cfg.namespace)
+        //         callback();
+        //     });
+        //     //this.emit('ready');
+        // }
 
 
     },
@@ -156,6 +182,7 @@ _.extend(DB.prototype, EventEmitter.prototype, {
         // if (this.db.config.namespace =='memory') {
         //     console.log('11111',this.db.conn)
         // }
+
         return this.db.conn;
     },
 
@@ -177,7 +204,7 @@ _.extend(DB.prototype, EventEmitter.prototype, {
      * @param callback Or OubtParams
      * @param callback
      */
-    execute : function() {
+     execute :  function() {
 
         this.db.execute.apply( this.db,arguments);
 

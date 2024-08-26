@@ -25,6 +25,8 @@ var App = Application.extend({
 
 
             self._dcServer = dc;
+            Garam.set('serverName',self.getServerName())
+
             self.addClientTransactions(self._dcServer);
             var packet = self.getTransaction('loginReqWorker').addPacket({
                 ip : dc.remoteIP,
@@ -36,6 +38,7 @@ var App = Application.extend({
                 servercode : servercode
             });
             dc.send(packet);
+
         });
         /**
          * remote 서버에 재접속 후 이벤트
@@ -57,16 +60,36 @@ var App = Application.extend({
 
         });
     },
-
+    /**
+     * worker 가 DC 에 로그인 성공 함..
+     * @param state
+     */
     setConnectionStatus : function (state) {
         this.state = state;
-        var aliasDomain = Garam.get('aliasDomain'),serverSSL=Garam.get('serverSSL'),self=this;
-        if(typeof aliasDomain !== 'undefined') {
-           // self.send(self.getTransaction('aliasUrlInfo').addPacket({aliasDomain:aliasDomain,serverSSL:serverSSL,serverType:Garam.get('serverType')}));
-        }
-        var controllers = Garam.getControllers();
-        for ( var i in Garam.getControllers()){
+        let aliasDomain = Garam.get('aliasDomain'),serverSSL=Garam.get('serverSSL');
+        let assert = require('assert');
+        let controllers = Garam.getControllers();
+        for ( let i in Garam.getControllers()){
             controllers[i].emit('connect:connected');
+        }
+        if (Garam.get('net').hostWorker ) {
+
+            let hostInfo = Garam.get('net').hostWorker;
+            /**
+             * "hostWorker" : [{
+              "hostname":"GHost",
+              "ip" :"127.0.0.1",
+              "port":5000,
+              "ctl" : "host"
+            } ]
+             */
+            for (let h of hostInfo) {
+                (function (host){
+                    assert(host.ctl);
+                    Garam.getCtl(host.ctl).listenServer(host);
+                })(h);
+            }
+         //   Garam.getCtl(hostInfo.ctl).listenServer();
         }
     },
     isConnectionDc : function () {
@@ -81,7 +104,14 @@ var App = Application.extend({
 
         }
 
-        return this._dcServer.serverName +':'+this.getClientPort();
+        if (Garam.get('portInfo').portType ===0 && !Garam.isMaster()) {
+            let worker = Garam.getWorkerID();
+
+            return this._dcServer.serverName +':'+worker+':'+this.getClientPort();
+        } else {
+            return this._dcServer.serverName +':'+this.getClientPort();
+        }
+
     },
     getClientPort : function () {
         return Garam.get('port');

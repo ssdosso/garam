@@ -13,7 +13,7 @@ function RouterFactory (app,webManager,callback) {
     this.webManager = webManager;
     this._routers = {};
     this._callback = typeof callback === 'function' ? callback : undefined;
-};
+}
 
 _.extend(RouterFactory.prototype, Base.prototype, {
     add : function(name,router) {

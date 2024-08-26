@@ -67,7 +67,7 @@ _.extend(CurrentModel.prototype, {
         switch (field.type) {
             case 'string':
                 if (!_.isString(useData)) {
-                    return useData.toString();;
+                    return useData.toString();
                 }
 
                 break;
@@ -86,6 +86,37 @@ _.extend(CurrentModel.prototype, {
         }
 
         return useData;
+    },
+    property : function (name,value) {
+        if (_.isObject(name)) {
+            var obj = name;
+            for (var field in this._memoryMemory.schema.properties) {
+                if (typeof obj[field] !== 'undefined') {
+
+                    this._data[field] =this._typeCheck(this._memoryMemory.schema.properties[field],obj[field]);
+                }
+            }
+
+        } else {
+
+            if (typeof this._memoryMemory.schema.properties[name] === 'undefined') {
+                assert(0);
+            }
+            if(typeof value !=='undefined') {
+
+                return this._data[name] = this._typeCheck(this._memoryMemory.schema.properties[name],value);
+            }
+            if (this._memoryMemory.schema.properties[name].type ==='json' && this._data[name] !== '') {
+
+                return JSON.parse(this._data[name]);
+            } else if (this._memoryMemory.schema.properties[name].type ==='json' &&  (this._data[name] == null || this._data[name] =='')) {
+
+                return {};
+            } else {
+                return this._data[name] ? this._data[name] : '';
+            }
+
+        }
     },
     p : function (name,value) {
         if (_.isObject(name)) {
@@ -139,6 +170,14 @@ _.extend(CurrentModel.prototype, {
 
         callback();
     },
+    savePromise :async   function(model) {
+        return new Promise((resolve, reject) => {
+            this.save(model,function (){
+                resolve(model);
+            });
+        });
+
+    },
     save : function (callback) {
 
         var args = Array.prototype.splice.call(arguments, 0),self=this;
@@ -146,9 +185,9 @@ _.extend(CurrentModel.prototype, {
             callback = args[1];
         }
         var query ;
-        if (this._data.isLive ==false) {
+        if (this._data.isLive ===false) {
 
-            //   console.log('# insert data',self.getQueryList())
+
             var queryList = self._memoryMemory.getQueryList();
 
             idGenerators.create(function (id) {
@@ -166,19 +205,7 @@ _.extend(CurrentModel.prototype, {
             });
 
         } else {
-            // if (queryArr.length ===0) {
-            //     var queryList = self.getQueryList();
-            //     for (var i in queryList) {
-            //         query = self.createQueryData(data,queryList[i]);
-            //         queryArr.push(query);
-            //         connect.addQuery(query,data._id);
-            //
-            //     }
-            // }
-            //
-            // for (var i in queryArr) {
-            //    var query = queryArr[i];
-            // }
+
 
             this._connect.addData(this._data);
 
@@ -579,7 +606,7 @@ _.extend(Model.prototype, EventEmitter.prototype, {
                 if (err && err !=='not found') {
 
                     callback(err);
-                    return;
+
                 } else if(err && err =='not found') {
                     load();
                 } else {
@@ -614,7 +641,7 @@ _.extend(Model.prototype, EventEmitter.prototype, {
                 if (err && err !=='not found') {
 
                     callback(err);
-                    return;
+
                 } else if(err && err =='not found') {
                     load();
                 } else {
@@ -693,19 +720,19 @@ _.extend(Model.prototype, EventEmitter.prototype, {
         var nModel =  nohm.factory(this.name);
         //  console.log(this.schema.properties)
         for (var field in this.schema.properties) {
-            nModel.p(field,model.p(field))
+            nModel.property(field,model.property(field))
             // this.schema.properties[field]
         }
         nModel.id = model.id;
         return nModel;
 
     },
-    insert : function(obj,callback) {
-        var self =this,model = this.factory();
+    insert : async function(obj,callback) {
+        let self =this,model = this.factory();
 
         return new Promise(function(resolved,rejected){
 
-            model.p(obj);
+            model.property(obj);
             model.save(function(err){
                 if (err === 'invalid') {
                     console.log('properties were invalid: '+JSON.stringify(obj), model.errors);
@@ -721,13 +748,14 @@ _.extend(Model.prototype, EventEmitter.prototype, {
         });
     },
 
-    insertItem : function(obj) {
+
+    insertItem : async function(obj) {
 
         var self =this,model = this.factory();
 
         return new Promise(function(resolved,rejected){
 
-            model.p(obj);
+            model.property(obj);
             model.save(function(err){
                 if (err === 'invalid') {
                     console.log('properties were invalid: '+JSON.stringify(obj), model.errors);
@@ -769,7 +797,7 @@ _.extend(Model.prototype, EventEmitter.prototype, {
         return query;
       //  console.log(queryData)
     },
-    _read : function (key) {
+    _read :async function (key) {
         var self=this;
         var model = this.factory();
         return new Promise(function (resolved,rejected) {
@@ -817,7 +845,42 @@ _.extend(Model.prototype, EventEmitter.prototype, {
     getQueryList : function() {
         return this._queryKeys;
     },
-    queryPromise : function (obj,dataload,mode) {
+    updateAllPromise : async function(model) {
+        return new Promise((resolve, reject)=>{
+
+            if (!model) {
+                Garam.logger().error('Not Found Model');
+                reject('Not Found Model');
+                return;
+            }
+
+
+
+            model.save(function(err){
+                if (err === 'invalid') {
+                    console.log('properties were invalid: ', model.errors);
+
+                    reject(err)
+                } else if (err) {
+
+                    console.log(err); // database or unknown error
+                    reject(err);
+                } else {
+                    resolve(null);
+                }
+            });
+        });
+
+    },
+    updatePromise : async function(model) {
+        return new Promise(function (resolved,rejected) {
+            model.save({ silent: true},function(){
+
+                resolved(  model);
+            });
+        });
+    },
+    queryPromise : async function (obj,dataload,mode) {
         var self=this;
         var model = this.factory();
 
@@ -838,47 +901,45 @@ _.extend(Model.prototype, EventEmitter.prototype, {
 
 
             }
-            var rows=[],models=[],work=0,func='';
 
-            // if (typeof dataload === 'undefined') {
-            //     dataload = true;
-            // }
-
-            model.find(obj, function (err, ids) {
+             model.find(obj, async  (err, ids) =>{
+           // model.find(obj, async function (err, ids) {
 
                 if (err) {
-
                     return (err === 'not found') ? resolved([]) : rejected(err);
-
                 }
 
-                // if (!dataload) {
-                //     resolved(ids);
-                //     return;
-                // }
-
-              //  console.log(ids)
-               //return resolved([]);
 
                 if (ids.length > 0) {
-                    for (var i=0; i < ids.length; i++) {
-                        (function(key){
-                            self._read(key)
-                                .then(function (model) {
+                    let promise = ids.map(async (key)=>{
+                       let model = await self._read(key);
 
-                                    models.push(model);
-                                    work++;
-                                    if (work ===ids.length ) {
-                                        resolved(models);
-                                    }
-                                })
-                                .catch(function (err) {
-                                    rejected(err)
-                                });
-                        })(ids[i]);
-                    }
+
+                        return model;
+                    });
+                    let models = await Promise.all(promise);
+
+
+                    resolved(models);
+
+                    // for (var i=0; i < ids.length; i++) {
+                    //     (function(key){
+                    //         self._read(key)
+                    //             .then(function (model) {
+                    //
+                    //                 models.push(model);
+                    //                 work++;
+                    //                 if (work ===ids.length ) {
+                    //                     resolved(models);
+                    //                 }
+                    //             })
+                    //             .catch(function (err) {
+                    //                 rejected(err)
+                    //             });
+                    //     })(ids[i]);
+                    // }
                 } else {
-                    return resolved(models);
+                    return resolved([]);
                 }
             });
 
@@ -979,7 +1040,7 @@ _.extend(Model.prototype, EventEmitter.prototype, {
             callback('Not Found Save Data');
             return;
         }
-        model.p(obj);
+        model.property(obj);
         model.save(function(err){
             if (err === 'invalid') {
                 console.log('properties were invalid: ', model.errors);

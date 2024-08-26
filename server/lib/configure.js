@@ -5,6 +5,7 @@ var _ = require('underscore')
     , Garam = require('./Garam')
     , assert= require('assert');
 
+
 exports =  module.exports  = BlueConfigure;
 function BlueConfigure(settingModel) {
 
@@ -15,29 +16,39 @@ function BlueConfigure(settingModel) {
 
 }
 _.extend(BlueConfigure.prototype, Base.prototype, {
-    loadJson : function(options,appDir) {
-        var scope = this,userOpt;
+    loadJson :async function(options,appDir) {
 
-        this.appDir = appDir;
-        this.userOpt =  userOpt = Optparse.parse(options, true);
 
-        for (var i in options) {
-            this._user_options[options[i].long] = options[i].value;
-            for (var j in userOpt) {
-                if (j ===options[i].long) {
-                    this._user_options[options[i].long] = userOpt[j];
+        try {
+            let scope = this,userOpt;
+
+            this.appDir = appDir;
+            this.userOpt =  userOpt = Optparse.parse(options, true);
+
+            for (var i in options) {
+                this._user_options[options[i].long] = options[i].value;
+                for (var j in userOpt) {
+                    if (j ===options[i].long) {
+                        this._user_options[options[i].long] = userOpt[j];
+                    }
                 }
+
             }
 
+            await this.readJsonFile('conf');
+            this.merge(scope.userOpt);
+
+        } catch (e) {
+            console.error(e);
         }
 
 
-        this.readJsonFile( 'conf', function () {
-
-            this.merge(scope.userOpt);
-            Garam.getInstance().emit('onloadConfig');
-
-        });
+        // this.readJsonFile( 'conf', function () {
+        //
+        //     this.merge(scope.userOpt);
+        //     Garam.getInstance().emit('onloadConfig');
+        //
+        // });
 
 
     },
@@ -85,56 +96,82 @@ _.extend(BlueConfigure.prototype, Base.prototype, {
             callback();
         });
     },
-    readJsonFile : function() {
-        var args = [].slice.call(arguments);
+    readJsonFile :async function(confDir) {
 
-        var fn = args.pop();
-        var total = args.length,len=0;
-        var self = this;
-        _.each(args,function(confDir) {
+      //  let args = [].slice.call(arguments);
 
-            var path = __dirname +'/../../'+self.appDir+'/'+confDir;
+      //  let fn = args.pop();
+   //     let total = args.length,len=0;
 
-            var jsonFiles = fs.readdirSync(path);
+        let self = this;
 
-            var subTotal = jsonFiles.length,subLen=0;
+        if (this._user_options.configname === true) this._user_options.configname = 'index';
 
-
-            if (self._user_options.configname ===true) {
-
-                jsonFiles = ['default.json'];
-            } else {
-                var debugFile = self._user_options.configname +'.json';
-
-                jsonFiles = [debugFile];
-            }
+        let path = __dirname +'/../../'+this.appDir+'/'+confDir;
 
 
-            subTotal = 1;
+        let jsonFiles = fs.readdirSync(path),currentFile;
+        let subTotal = jsonFiles.length,subLen=0;
 
-            _.each(jsonFiles,function(jsonfile) {
+        currentFile = self._user_options.configname +'.json';
 
-                var extension = jsonfile.split('.')[1];
-                if (extension === 'json') {
-                    var targetFile = path + '/' + jsonfile;
-
-                    var setting = JSON.parse(fs.readFileSync(targetFile));
-
-                    for (var key in setting ) {
-                        this.settingModel.set(key,setting[key]);
-                    }
-                }
-                subLen++;
-                if (subLen ===subTotal) {
-                    len++;
-                    if (len === total) {
-
-                        fn.call(this);
-                    }
-                }
-            },this);
+        if (_.indexOf(jsonFiles,currentFile) === -1) {
+           console.error('not found config file',jsonFiles,currentFile);
+        }
+        let targetFile = path + '/' + currentFile;
+        let setting = JSON.parse(fs.readFileSync(targetFile));
 
 
-        },this);
+        for (let key in setting ) {
+          this.settingModel.set(key,setting[key]);
+        }
+
+        // _.each(args, function(confDir) {
+        //     console.log(confDir)
+        // });
+
+
+        // _.each(args, function(confDir) {
+        //
+        //     let path = __dirname +'/../../'+self.appDir+'/'+confDir;
+        //     let jsonFiles = fs.readdirSync(path);
+        //     let subTotal = jsonFiles.length,subLen=0;
+        //     if (self._user_options.configname ===true) {
+        //
+        //         jsonFiles = ['default.json'];
+        //     } else {
+        //         let debugFile = self._user_options.configname +'.json';
+        //
+        //         jsonFiles = [debugFile];
+        //     }
+        //
+        //
+        //     subTotal = 1;
+        //
+        //
+        //     _.each(jsonFiles,function(jsonfile) {
+        //
+        //         let extension = jsonfile.split('.')[1];
+        //         if (extension === 'json') {
+        //             let targetFile = path + '/' + jsonfile;
+        //
+        //             let setting = JSON.parse(fs.readFileSync(targetFile));
+        //
+        //             for (let key in setting ) {
+        //                 this.settingModel.set(key,setting[key]);
+        //             }
+        //         }
+        //         subLen++;
+        //         if (subLen ===subTotal) {
+        //             len++;
+        //             if (len === total) {
+        //
+        //                 fn.call(this);
+        //             }
+        //         }
+        //     },this);
+        //
+        //
+        // },this);
     }
 });

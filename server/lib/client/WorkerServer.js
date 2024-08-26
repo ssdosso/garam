@@ -13,7 +13,7 @@ exports = module.exports = ServiceClientServer;
 function ServiceClientServer () {
     Base.prototype.constructor.apply(this,arguments);
 
-};
+}
 
 _.extend(ServiceClientServer.prototype,{
     init : function () {

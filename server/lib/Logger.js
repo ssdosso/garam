@@ -24,7 +24,7 @@ function Logger (mgr, name) {
     this._disable =false;
 
 
-};
+}
 
 _.extend(Logger.prototype, Base.prototype, {
     init : function() {
@@ -57,9 +57,11 @@ _.extend(Logger.prototype, Base.prototype, {
         this.createInterVal = null;
         this.hostName = '';
         this.currentMonthdir = moment().format('YYYY-MM');
-        this.dir =Garam.getInstance().get('logDir');
+       // this.dir =Garam.getInstance().get('logDir');
+        this.dir = Garam.get('logDir');
+
         if (!fs.existsSync(this.dir)) {
-            this.dir = './logs';
+           // this.dir = './logs';
             fs.mkdirSync( this.dir);
         }
         this.currentDir = this.dir+'/'+this.currentMonthdir;
@@ -94,7 +96,7 @@ _.extend(Logger.prototype, Base.prototype, {
             // prettyPrint: true,
             colorize: true,
             silent: false,
-            timestamp: false
+            timestamp: function() { return moment().format('YYYY-MM-DD HH:mm:ss.SSS')}
         });
 
         this.logger.add(winston.transports.File, {
@@ -108,122 +110,6 @@ _.extend(Logger.prototype, Base.prototype, {
             json: false
         });
 
-
-
-        this._use_s3 = false;
-        if (typeof Garam.get('logger_s3') !=='undefined' && Garam.get('logger_s3') === true) {
-            Garam.logger().info('start logger_s3');
-            var AWS = require('aws-sdk');
-
-
-            var aws = Garam.get('AWS').config;
-            AWS.config.update(aws);
-
-            var S3StreamLogger = require('s3-streamlogger').S3StreamLogger;
-            if (!Garam.getInstance().getServerIP()) {
-                Garam.getInstance().getServerIP(function (ip) {
-
-                    getPort.call(self);
-                });
-
-            }
-
-            function getPort() {
-                if (!Garam.getCluster().isWorker()) {
-
-                    this.hostName = Garam.get('serverType')+':master';
-                    createS3Logger.call(self);
-                } else {
-                    if (!Garam.getWebServer()) {
-                        setTimeout(function () {
-                            getPort.call(self);
-                        },50);
-                    } else {
-                        if (!Garam.getWebServer().getListenStatus()) {
-                            setTimeout(function () {
-                                getPort.call(self);
-                            },50);
-                        } else {
-                            this.hostName = Garam.get('serverType')+':'+Garam.get('port');
-                            createS3Logger.call(self);
-                        }
-                    }
-                }
-            }
-
-            function createS3Logger() {
-                if ( this.logger_s3) {
-                    delete  this.logger_s3;
-                }
-                if (Garam.isMaster()) {
-                    var s3LogFile =  'logs/'+this.currentMonthdir+'/'+Garam.getInstance().getServerIP()+'/'+moment().format('YYYYMMDD')+'/'+this.hostName+'.log';
-                } else {
-
-                    var s3LogFile =  'logs/'+this.currentMonthdir+'/'+Garam.getInstance().getServerIP()+'/'+moment().format('YYYYMMDD')+'/'+this.hostName+'_'+Garam.getWorkerID()+'.log';
-                }
-
-                var s3stream = new S3StreamLogger({
-                    bucket: Garam.get('AWS').bucket,
-                    access_key_id: aws.accessKeyId,
-                    secret_access_key: aws.secretAccessKey,
-                    name_format :s3LogFile,
-                    rotate_every:3600 *24 * 1000,
-                    max_file_size : 400000000
-                });
-
-                s3stream.on('error', function(err){
-                    // there was an error!
-                    console.log(err)
-                });
-
-                this._use_s3 = true;
-                this.logger_s3 = new (winston.Logger)({
-                    levels: {
-                        cluster: 5,
-                        packet :4,
-                        user :3,
-                        info: 2,
-                        warn: 1,
-                        error: 0
-                    },
-                    colors: {
-                        cluster: 'magenta',
-                        packet: 'cyan',
-                        user :'grey',
-                        info: 'green',
-                        warn: 'yellow',
-                        error: 'red'
-                    }
-                });
-
-                this.logger_s3.add(winston.transports.File, {
-                    stream: s3stream,
-                    timestamp: function() { return moment().format('YYYY-MM-DD hh:mm:ss.SSS')},
-                    levels: {
-                        cluster: 5,
-                        packet :4,
-                        user :3,
-                        info: 2,
-                        warn: 1,
-                        error: 0
-                    },
-                    colors: {
-                        cluster: 'magenta',
-                        packet: 'cyan',
-                        user :'grey',
-                        info: 'green',
-                        warn: 'yellow',
-                        error: 'red'
-                    }
-                });
-
-
-
-            }
-
-
-
-        }
 
         this.createInterVal = setInterval(function(){ self.dayCheck() },60 * 1000);
 
@@ -278,22 +164,25 @@ _.extend(Logger.prototype, Base.prototype, {
     },
     info : function() {
         if (this._disable) return;
+
+        let args = Array.prototype.slice.call(arguments);
+
+
         if ( Cluster.isMaster) {
-            this.logger.info.apply( this.logger, arguments);
+            this.logger.info.apply( this.logger, args);
         } else {
 
-            var mainArguments = Array.prototype.slice.call(arguments);
+            let mainArguments = Array.prototype.slice.call(args);
             mainArguments.unshift("cluster:"+Cluster.worker.id);
             this.logger.info.apply( this.logger, mainArguments);
         }
 
-        if (this._use_s3 && this.logger_s3) {
-            this.logger_s3.info.apply( this.logger_s3, arguments);
-        }
+
     } ,
     error: function(log,err) {
 
         if ( Cluster.isMaster) {
+
             this.logger.error.apply(this.logger, arguments);
         } else {
 

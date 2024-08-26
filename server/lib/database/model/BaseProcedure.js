@@ -49,7 +49,7 @@ function DB_SQL () {
 
 
 _.extend(DB_SQL.prototype, EventEmitter.prototype, {
-    create : function() {},
+    create : async function() {},
     run : function() {
 
     },
@@ -111,8 +111,8 @@ _.extend(DB_SQL.prototype, EventEmitter.prototype, {
     getModel : function() {
         return this._model;
     },
-    execute : function(params,callback,scope) {
 
+    execute : function(params,callback,scope) {
 
         var db = Garam.getDB(this.namespace),self =this,useStream=false;
 

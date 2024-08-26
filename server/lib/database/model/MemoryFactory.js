@@ -31,7 +31,7 @@ _.extend(ModelFactory.prototype, Base.prototype, {
         db.addProcedure(model.name,model);
         //Garam.setModel(model.name,model);
     },
-    create : function(model_dir) {
+    create : async function(model_dir) {
         var self = this;
         var namespace = this.namespace;
         var modelDir = this.appDir + '/model/'+namespace;

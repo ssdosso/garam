@@ -209,7 +209,7 @@ _.extend(Model.prototype, EventEmitter.prototype, {
                 if (err && err !=='not found') {
 
                     callback(err);
-                    return;
+
                 } else if(err && err =='not found') {
                     load();
                 } else {
@@ -366,8 +366,9 @@ _.extend(Model.prototype, EventEmitter.prototype, {
                 if (err && err !=='not found') {
 
                     callback(err);
-                    return;
+
                 } else if(err && err =='not found') {
+                    console.error('error',rows)
                     load();
                 } else {
                     rows.push(properties);
@@ -436,20 +437,20 @@ _.extend(Model.prototype, EventEmitter.prototype, {
 
 
     },
-    _read : function (key) {
-        var nohm =  this.getNohm(),self=this;
-        var model = nohm.factory(this.name);
-        return new Promise(function (resolved,rejected) {
-                model.load(key, function (err, properties) {
-                    if (err && err !=='not found') {
-                         rejected(err);
-                    } else {
+    _read : async function (key,obj= {}) {
+        let nohm =  this.getNohm(),self=this;
+        let model = await nohm.factory(this.name);
+        return new Promise(async function (resolved,rejected) {
 
-                        resolved(model);
-                    }
+            try {
+                await model.load(key);
+                resolved(model)
+            } catch (e) {
+                Garam.logger().error(e,obj);
+                rejected(e);
+            }
 
 
-                });
         });
     },
     getWriteModel : function(model) {
@@ -460,70 +461,124 @@ _.extend(Model.prototype, EventEmitter.prototype, {
         var nModel =  nohm.factory(this.name);
           //  console.log(this.schema.properties)
             for (var field in this.schema.properties) {
-                nModel.p(field,model.p(field))
+                nModel.property(field,model.property(field))
                // this.schema.properties[field]
             }
              nModel.id = model.id;
             return nModel;
 
     },
-    queryPromise : function (obj,dataload,mode) {
-        var nohm = this.getNohm(mode),self=this;
-        var model = nohm.factory(this.name);
+    updateAllPromise : async function(model) {
 
+        return new Promise(async (resolved,rejected)=>{
+            if (typeof model === 'undefined') {
 
-
-
-        return new Promise(function (resolved,rejected) {
-            if (!_.isObject(obj)){
-                return rejected('redis query error:'+ JSON.stringify(obj));
+               return rejected('There is nothing to update');
             }
-            for (var i in obj) {
+            try {
+                await model.save();
+                resolved(model);
+            } catch (e) {
+                Garam.logger().error(e);
+                rejected(e);
+            }
+        });
+    },
+    updatePromise : async function(keys,obj) {
+        return new Promise(async (resolved,rejected)=>{
+
+            let rows =await this.queryPromise(keys);
+            if (rows.length ===0) {
+                Garam.logger().error('Not Found Model');
+
+                rejected('Not Found Model')
+                return;
+            }
+
+            let model = rows[0];
+
+
+            if (typeof obj === 'undefined') {
+                rejected('There is nothing to update')
+                return;
+            }
+            let params ={};
+            if (_.isArray(obj)) {
+
+                for (let i =0; i < obj.length; i++) {
+                    let data = Object.entries(obj[i])[0];
+                    params[data[0]] = data[1];
+                }
+
+
+            } else {
+                params = obj;
+            }
+            try {
+                model.property(params);
+
+                await model.save();
+                resolved(model);
+            } catch (e) {
+                Garam.logger().error(e);
+                rejected(e);
+            }
+
+
+
+        });
+    },
+    queryPromise : async function (obj,dataload,mode) {
+        let nohm = this.getNohm(mode),self=this;
+        let model = await nohm.factory(this.name);
+
+        let modelName = this.name;
+
+
+        return new Promise(async function (resolved,rejected) {
+            if (!_.isObject(obj)){
+                return rejected('redis query , not found obj:'+modelName+':'+ JSON.stringify(obj));
+            }
+            for (let i in obj) {
                 if (typeof obj[i] === 'undefined') {
-                    return rejected('redis query error: parameter error, '+ JSON.stringify(obj));
+                    Garam.logger().error(i,' undefined')
+                    return rejected('redis query error: parameter error, '+ modelName+":"+i);
+                 //   return rejected('redis query error: parameter error, '+ JSON.stringify(obj));
                 }
             }
-            var rows=[],models=[],work=0,func='';
+            let rows=[],models=[],work=0,func='';
 
             if (typeof dataload === 'undefined') {
                 dataload = true;
             }
-
-            model.find(obj, function (err, ids) {
-
-                if (err) {
-
-                    return (err === 'not found') ? resolved([]) : rejected(err);
-
-                }
-
+            try {
+                let ids =  await model.find(obj);
                 if (!dataload) {
                     resolved(ids);
                     return;
                 }
 
-
-
                 if (ids.length > 0) {
-                   for (var i=0; i < ids.length; i++) {
-                       (function(key){
-                           self._read(key)
-                               .then(function (model) {
-                                   models.push(model);
-                                   work++;
-                                   if (work ===ids.length ) {
-                                       resolved(models);
-                                   }
-                               })
-                               .catch(function (err) {
-                                   rejected(err)
-                               });
-                       })(ids[i]);
-                   }
+                    let loadModules =  ids.map(async (id)=>{
+                        let model = await self._read(id,obj);
+                        models.push(model);
+                    });
+                    await Promise.all(loadModules);
+
+                    resolved(models);
+                    // for (var i=0; i < ids.length; i++) {
+                    //
+                    //     await self._read(ids[i]);
+                    //
+                    // }
                 } else {
                     return resolved(models);
                 }
-            });
+            } catch (e) {
+                Garam.logger().error(e,obj)
+                rejected(e);
+            }
+
 
 
 
@@ -591,56 +646,85 @@ _.extend(Model.prototype, EventEmitter.prototype, {
         });
 
     },
-    deleteItem : function (model) {
-        var self =this,nohm=this.nohm;
+    deleteItem : async function (model) {
+        let self =this,nohm=this.nohm;
 
         if (!model) {
-            model = nohm.factory(this.name);
-        }
-        return new Promise(function(resolved,rejected){
-            model.remove({ // options object can be omitted
-                silent: false, // whether remove event is published. defaults to false.
-            }, function (err) {
-                if (err) {
 
-                    return rejected(err);
-                }
-                return resolved(null);
-            });
+            model =await nohm.factory(this.name);
+
+        }
+        return new Promise(async function(resolved,rejected){
+            try {
+                await model.remove({
+                    // options object can be omitted
+                    silent: true, // whether remove event is published. defaults to false.
+                });
+
+                resolved();
+            } catch (error) {
+
+                Garam.logger().error(error);
+                rejected(error);
+                // removal failed.
+            }
+
 
         });
     },
-    update : function(model,obj,callback) {
-        if (!model) {
-            Garam.logger().error('Not Found Model');
-            callback('Not Found Model');
-            return;
-        }
+    updateModel : async function(model) {
+        return new Promise(async (resolved,rejected)=>{
+            try {
+                assert(model);
+                await model.save();
+                resolved(model);
+            } catch (e) {
 
-        if (!obj) {
-            Garam.logger().error('Not Found Save Data');
-            callback('Not Found Save Data');
-            return;
-        }
-        model.p(obj);
-        model.save(function(err){
-            if (err === 'invalid') {
-                console.log('properties were invalid: ', model.errors);
-
-                callback(err)
-            } else if (err) {
-
-                console.log(err); // database or unknown error
-                callback(err);
-            } else {
-                callback(null);
+                Garam.logger().error(e);
+                rejected(e);
             }
+
         });
+    },
+    update : async function(model,obj,field) {
+
+
+        return new Promise(async function(resolved,rejected){
+
+            if (!model) {
+                Garam.logger().error('Not Found Model');
+
+                rejected('Not Found Model')
+                return;
+            }
+
+            if (typeof obj === 'undefined') {
+                rejected('Not Found Save Data')
+                return;
+            }
+            try {
+                if (typeof field != 'undefined' ) {
+                    model.property(field,obj);
+                } else {
+                    model.property(obj);
+                }
+
+                await model.save();
+                resolved(model);
+            } catch (e) {
+                Garam.logger().error(e);
+                rejected(e);
+            }
+
+
+
+        });
+
     },
     insert : function(obj,callback) {
         var nohm = this.nohm;
         var model = nohm.factory(this.name);
-        model.p(obj);
+        model.property(obj);
         model.save(function(err){
             if (err === 'invalid') {
                // console.log('properties were invalid: '+JSON.stringify(obj), model.errors);
@@ -654,27 +738,21 @@ _.extend(Model.prototype, EventEmitter.prototype, {
             }
         });
     },
-    insertItem : function(obj) {
+    insertItem : async function(obj) {
 
-        var self =this,nohm=this.nohm,model = nohm.factory(this.name);
-        if (!model) {
-            model = nohm.factory(this.name);
-        }
-        return new Promise(function(resolved,rejected){
+        let self =this,nohm=this.nohm,model =await nohm.factory(this.name);
 
-            model.p(obj);
-            model.save(function(err){
-                if (err === 'invalid') {
-                    console.log('properties were invalid: '+JSON.stringify(obj), model.errors);
-                    return rejected(err);
-                } else if (err) {
+        return new Promise( async function(resolved,rejected){
+            try {
 
-                    return rejected(err);
-                } else {
+                model.property(obj);
+                await model.save();
+                resolved(model);
+            } catch (e) {
+                Garam.logger().error(e);
+                rejected(e);
+            }
 
-                    return resolved(model);
-                }
-            });
         });
 
     },

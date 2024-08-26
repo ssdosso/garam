@@ -4,13 +4,18 @@ var _ = require('underscore')
 
     , Base = require('./Base')
     , HostServer = require('./rpc/host/HostServer')
+    , TcpClientServer = require('./rpc/host/TcpClientServer') //user  와의  접속
     , ClientServer = require('./rpc/remote/ClientServer')
     , async = require('async')
-    , io = require('socket.io')
+
     , domain = require('domain')
     , adapter = require('socket.io-redis')
     , assert= require('assert');
 
+
+const { Server } = require("socket.io");
+const Net = require("net");
+const {WebSocketServer} = require("ws");
 exports = module.exports = Transport;
 
 function Transport (mgr, name) {
@@ -19,55 +24,130 @@ function Transport (mgr, name) {
     this._hostServer = {};
     this._remoteServer = {};
     this.dcServerCheckInterval = {};
+    this._tcpServer = null;
 };
 
 _.extend(Transport.prototype, Base.prototype, {
-    createWebSocket : function(server,callback) {
-        var self = this;
+    addTcpSocket : async function (server) {
+        return new Promise((resolve, reject)=>{
+            if (!Garam.getInstance().get('service')) {
+                return;
+            }
+            let self = this,port;
+            if (!Garam.get('tcpPort')) {
+                let defaultPort=Garam.get('portInfo').tcpPort,port = defaultPort + Garam.getWorkerID();
+            } else {
+                port = Garam.get('tcpPort');
+            }
 
+
+            this._tcpServer = new TcpClientServer({port:port});
+
+            this._tcpServer.listen(function(){
+                //   console.log(options.hostname);
+                console.log('tcp litesn')
+                resolve();
+            });
+        });
+
+    },
+    createTcpSocket : function (server,callback) {
         if (!Garam.getInstance().get('service')) {
             return;
         }
 
-        var self = this;
-        var options = function() {
+
+        let self = this,port;
+        let options = function() {
             return server.options;
         }
 
-
-        this._socketServer =  io.listen(server);
-        if (Garam.getInstance().get('clusterMode') && server.options.redisConn) {
-            var redis = require('redis').createClient;
-            if (typeof options().redis.auth !=='undefined') {
-                var pub = redis(options().redis.port, options().redis.host, { auth_pass: options().redis.auth  });
-                var sub = redis(options().redis.port, options().redis.host, { return_buffers: true, auth_pass:options().redis.auth  });
-            } else {
-                var pub = redis(options().redis.port, options().redis.host);
-                var sub = redis(options().redis.port, options().redis.host, { return_buffers: true});
-            }
-
-
-            this._socketServer.adapter(adapter({ pubClient: pub, subClient: sub }));
-            // this._socketServer.adapter(redis({ host: options().redis.host, port: options().redis.port,auth_pass:options().redis.auth  }));
+        Garam.set('transportType',"tcp");
+        if (!Garam.get('tcpPort')) {
+            let defaultPort=Garam.get('portInfo').tcpPort,port = defaultPort + Garam.getWorkerID();
+        } else {
+            port = Garam.get('tcpPort');
         }
 
-        if (server.options.transportOptions != null ) {
-            for (var opt in server.options.transportOptions) {
-                self._socketServer.set(opt, server.options.transportOptions[opt]);
-            }
+        Garam.logger().info('set tcp socket',port)
+        this._tcpServer = new TcpClientServer({port:port});
+
+
+        Garam.set('port',port);
+
+
+
+
+        this._tcpServer.listen(function(){
+            //   console.log(options.hostname);
+            let controllers =  Garam.getControllers();
+
+
+            callback();
+
+        });
+
+
+    },
+    createWebSocket : function (httpServer,callback) {
+        const {WebSocketServer  } = require('ws');
+        let self = this;
+
+        try {
+            this._socketServer = new WebSocketServer({ server:httpServer});
+
+            let controllers =  Garam.getControllers();
+            Garam.set('transportType',"webSocket");
+            Garam.logger().info('transportType webSocket')
+            //
+            this._socketServer.on('connection', function (socket,req) {
+                socket.id = self.generateId();
+                socket.remoteAddress = req.socket.remoteAddress;
+                for (let i in controllers) {
+                    controllers[i].emit('userConnection',socket);
+                }
+            });
+
+            callback();
+        } catch (e) {
+            Garam.logger().error(e)
         }
-        var controllers =  Garam.getControllers();
+
+    },
+    createSocketIo : function(httpServer,callback) {
+        var self = this;
+        if (!Garam.getInstance().get('service')) {
+            return;
+        }
+        var self = this;
+        var options = function() {
+            return httpServer.options;
+        }
+        Garam.set('transportType',"socketIo");
+        Garam.logger().info('transportType socketIo')
+        // this._socketServer =  io.listen(server);
+
+
+        this._socketServer = new Server(httpServer, {
+
+            cors: {
+                origin: "*",
+                methods: ["GET", "POST"]
+            },
+            pingInterval: 10000,
+            pingTimeout: 5000,
+            cookie: false
+        });
+
+
+        let controllers =  Garam.getControllers();
         Garam.getInstance().log.info('Socket.io listen ');
 
 
         self._socketServer.sockets.on('connection', function (socket) {
-
-            for (var i in controllers) {
+            for (let i in controllers) {
                 controllers[i].emit('userConnection',socket);
             }
-
-
-
         });
 
 
@@ -76,32 +156,59 @@ _.extend(Transport.prototype, Base.prototype, {
         callback();
 
     },
+    generateId : function() {
+        return Math.abs(Math.random() * Math.random() * Date.now() | 0).toString()
+            + Math.abs(Math.random() * Math.random() * Date.now() | 0).toString();
+    },
+    getRemoteServer : function (hostname) {
+        return this._remoteServer[hostname];
+    },
+    closeRemoteSocket : function (hostname) {
+        if ( this._remoteServer[hostname]) {
+            Garam.logger().info('close remote socket',hostname)
+            this.removeReconnectEvent(hostname)
+            this._remoteServer[hostname].socket.end();
+            //delete this._remoteServer[hostname].socket;
 
-    createRemote : function(options,callback) {
-        var self = this;
-        var remoteOptions = options;
+        }
+    },
+    createRemote : async function(options,callback) {
+        let self = this;
+        let remoteOptions = options;
         assert(remoteOptions.hostname);
         Garam.logger().info('RPC login to ',remoteOptions)
-        this._remoteServer[remoteOptions.hostname] = new ClientServer();
-        this._remoteServer[remoteOptions.hostname].startConnect(remoteOptions,function(server){
-            self.emit('connect:'+remoteOptions.hostname,server);
-            callback(server);
-        });
-        if (typeof remoteOptions.reconnectOptions !== 'undefined' && remoteOptions.reconnectOptions === false) {
-          console.log('reconnec t를 사용안함')
-            return;
-        }
+        return new Promise((resolve, reject)=>{
+            try {
+                this._remoteServer[remoteOptions.hostname] = new ClientServer();
+                this._remoteServer[remoteOptions.hostname].startConnect(remoteOptions,function(server){
 
-        this.reconnectEvent(remoteOptions.hostname);
+                    self.emit('connect:'+remoteOptions.hostname,server);
+                    resolve(server);
+                });
+
+                if (typeof remoteOptions.reconnectOptions !== 'undefined' && remoteOptions.reconnectOptions === false) {
+
+                    return;
+                }
+
+                this.reconnectEvent(remoteOptions.hostname);
+            } catch (e) {
+                Garam.logger().error(e)
+                reject(e);
+            }
+
+        });
+
 
     },
     createHost : function(options,callback) {
 
         assert(options.hostname);
-        var self = this;
+        let self = this;
         this._hostServer[options.hostname] = new HostServer(options);
         this._hostServer[options.hostname].listen(function(){
-         //   console.log(options.hostname);
+            //   console.log(options.hostname);
+            //Garam.logger().info('host listen:'+options.hostname,options.port);
             self.emit('listen:'+options.hostname,self._hostServer[options.hostname]);
             callback();
 
@@ -154,6 +261,7 @@ _.extend(Transport.prototype, Base.prototype, {
         var self = this;
         this.dcServerCheckInterval[hostname] =  setInterval(function(){
             if(self._remoteServer[hostname].disconnected) {
+
                 clearInterval(self.dcServerCheckInterval[hostname]);
                 self.connectServer(self._remoteServer[hostname].options);
             }
